@@ -335,9 +335,9 @@ function initAppShell() {
           
           ${!isConfigured ? `
             <div class="demo-badge-container text-center mt-6" style="margin-top: 1.5rem; text-align: center;">
-              <span class="demo-badge">Modalità Demo Locale</span>
+              <span class="demo-badge" style="background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border-color: rgba(239, 68, 68, 0.4);">Errore di Configurazione</span>
               <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
-                Supabase non configurato. I dati saranno salvati solo su questo dispositivo.
+                Le chiavi del server non sono configurate. Contatta l'amministratore o verifica le variabili d'ambiente.
               </p>
             </div>
           ` : ''}
@@ -386,7 +386,7 @@ function initAppShell() {
           <div class="app-title-logo">
             ${icons.wallet('w-6 h-6')}
             <h2>Flussio</h2>
-            ${!isConfigured ? '<span class="demo-badge">Demo</span>' : ''}
+            ${!isConfigured ? '<span class="demo-badge" style="background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border-color: rgba(239, 68, 68, 0.4);">Non Connesso</span>' : ''}
           </div>
           <button id="header-logout-btn" class="action-icon" title="Esci">
             ${icons.logout('w-5 h-5')}
@@ -829,14 +829,14 @@ function renderSettings() {
         </span>
       </div>
 
-      <!-- Supabase Configuration status -->
+      <!-- Cloud Configuration status -->
       <div class="settings-item">
         <div class="settings-item-left">
           ${icons.database('w-5 h-5')}
-          <span class="settings-item-title">Sincronizzazione Supabase</span>
+          <span class="settings-item-title">Sincronizzazione Cloud</span>
         </div>
-        <span style="font-size: 0.85rem; color: ${isConfigured ? 'var(--accent-green)' : 'var(--accent-orange)'}; font-weight: 500;">
-          ${isConfigured ? 'Connesso (Cloud)' : 'Disconnesso (Demo Locale)'}
+        <span style="font-size: 0.85rem; color: ${isConfigured ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight: 500;">
+          ${isConfigured ? 'Attiva' : 'Non Attiva'}
         </span>
       </div>
     </div>
@@ -872,9 +872,14 @@ function renderSettings() {
       </div>
     </div>
 
-    <button id="logout-btn" class="btn btn-secondary mt-6" style="margin-top: 1.5rem; color: var(--accent-red);">
-      ${icons.logout('w-5 h-5')} Disconnetti Account
-    </button>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem;">
+      <button id="logout-btn" class="btn btn-secondary" style="color: var(--text-primary);">
+        ${icons.logout('w-5 h-5')} Disconnetti Account
+      </button>
+      <button id="delete-account-btn" class="btn btn-secondary" style="color: var(--accent-red); border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">
+        ${icons.trash('w-5 h-5')} Elimina Account e Dati
+      </button>
+    </div>
   `;
 
   // Attach change listener to salary day
@@ -896,6 +901,24 @@ function renderSettings() {
   document.getElementById('logout-btn').addEventListener('click', async () => {
     if (confirm('Sei sicuro di voler uscire?')) {
       await db.auth.signOut();
+    }
+  });
+
+  // Attach delete account listener
+  document.getElementById('delete-account-btn').addEventListener('click', async () => {
+    const confirm1 = confirm("ATTENZIONE: Questa azione è irreversibile. Verranno eliminati definitivamente il tuo account e TUTTI i dati associati.\n\nSei sicuro di voler procedere?");
+    if (confirm1) {
+      const confirm2 = confirm("SEI ASSOLUTAMENTE SICURO?\nTutti i tuoi dati mensili, annuali e il tuo profilo verranno eliminati per sempre dal server.");
+      if (confirm2) {
+        renderAppLoader(true);
+        const res = await db.auth.deleteAccount();
+        renderAppLoader(false);
+        if (res.error) {
+          alert(`Errore durante l'eliminazione dell'account: ${res.error.message || JSON.stringify(res.error)}`);
+        } else {
+          alert("Account eliminato con successo. Verrai reindirizzato alla schermata di accesso.");
+        }
+      }
     }
   });
 
