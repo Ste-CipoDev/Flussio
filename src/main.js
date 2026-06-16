@@ -15,6 +15,16 @@ let state = {
   isAuthMode: 'login' // login, register
 };
 
+// Database error helper
+function checkError(result, actionName) {
+  if (result && result.error) {
+    console.error(`Error during ${actionName}:`, result.error);
+    alert(`Errore (${actionName}): ${result.error.message || JSON.stringify(result.error)}`);
+    return false;
+  }
+  return true;
+}
+
 // ==========================================
 // Date & Calculation Helpers
 // ==========================================
@@ -488,9 +498,11 @@ function renderDashboard() {
       btn.addEventListener('click', async (e) => {
         const id = e.currentTarget.getAttribute('data-id');
         if (confirm('Eliminare questa spesa programmata?')) {
-          await db.planned.delete(state.user.id, id);
-          await fetchAllData();
-          renderDashboard();
+          const res = await db.planned.delete(state.user.id, id);
+          if (checkError(res, "eliminazione spesa variabile")) {
+            await fetchAllData();
+            renderDashboard();
+          }
         }
       });
     });
@@ -571,9 +583,11 @@ function renderMonthly() {
       btn.addEventListener('click', async (e) => {
         const id = e.currentTarget.getAttribute('data-id');
         if (confirm('Sei sicuro di voler eliminare questa spesa fissa?')) {
-          await db.monthly.delete(state.user.id, id);
-          await fetchAllData();
-          renderMonthly();
+          const res = await db.monthly.delete(state.user.id, id);
+          if (checkError(res, "eliminazione spesa fissa")) {
+            await fetchAllData();
+            renderMonthly();
+          }
         }
       });
     });
@@ -670,13 +684,16 @@ function renderAnnual() {
         const id = e.currentTarget.getAttribute('data-id');
         const isConfirmed = e.currentTarget.getAttribute('data-confirmed') === 'true';
         
+        let res;
         if (isConfirmed) {
-          await db.annualStatus.unconfirm(state.user.id, id, currentYear);
+          res = await db.annualStatus.unconfirm(state.user.id, id, currentYear);
         } else {
-          await db.annualStatus.confirm(state.user.id, id, currentYear);
+          res = await db.annualStatus.confirm(state.user.id, id, currentYear);
         }
-        await fetchAllData();
-        renderAnnual();
+        if (checkError(res, "conferma pagamento annuale")) {
+          await fetchAllData();
+          renderAnnual();
+        }
       });
     });
 
@@ -685,9 +702,11 @@ function renderAnnual() {
       btn.addEventListener('click', async (e) => {
         const id = e.currentTarget.getAttribute('data-id');
         if (confirm('Sei sicuro di voler eliminare questa spesa annuale?')) {
-          await db.annual.delete(state.user.id, id);
-          await fetchAllData();
-          renderAnnual();
+          const res = await db.annual.delete(state.user.id, id);
+          if (checkError(res, "eliminazione spesa annuale")) {
+            await fetchAllData();
+            renderAnnual();
+          }
         }
       });
     });
@@ -789,10 +808,11 @@ function renderSettings() {
     if (day > 31) day = 31;
     e.target.value = day;
     
-    await db.profile.update(state.user.id, { salary_day: day });
-    await fetchAllData();
-    // Refresh view
-    renderSettings();
+    const res = await db.profile.update(state.user.id, { salary_day: day });
+    if (checkError(res, "salvataggio giorno stipendio")) {
+      await fetchAllData();
+      renderSettings();
+    }
   });
 
   // Attach logout listener
@@ -834,31 +854,38 @@ function renderSettings() {
 
           // 1. Update Profile
           if (data.profile) {
-            await db.profile.update(userId, {
+            const res = await db.profile.update(userId, {
               salary_day: data.profile.salary_day,
               current_balance: data.profile.current_balance
             });
+            checkError(res, "importazione profilo");
           }
 
           // 2. Clear & Import Monthly Commitments
-          const { data: currentMonthly } = await db.monthly.list(userId);
-          for (const item of currentMonthly) {
-            await db.monthly.delete(userId, item.id);
+          const { data: currentMonthly, error: listMonthlyErr } = await db.monthly.list(userId);
+          if (!listMonthlyErr) {
+            for (const item of currentMonthly) {
+              await db.monthly.delete(userId, item.id);
+            }
           }
           if (data.monthlyCommitments) {
             for (const item of data.monthlyCommitments) {
-              await db.monthly.insert(userId, { name: item.name, day: item.day, amount: item.amount });
+              const res = await db.monthly.insert(userId, { name: item.name, day: item.day, amount: item.amount });
+              checkError(res, "importazione spesa mensile");
             }
           }
 
           // 3. Clear & Import Annual Commitments
-          const { data: currentAnnual } = await db.annual.list(userId);
-          for (const item of currentAnnual) {
-            await db.annual.delete(userId, item.id);
+          const { data: currentAnnual, error: listAnnualErr } = await db.annual.list(userId);
+          if (!listAnnualErr) {
+            for (const item of currentAnnual) {
+              await db.annual.delete(userId, item.id);
+            }
           }
           if (data.annualCommitments) {
             for (const item of data.annualCommitments) {
-              await db.annual.insert(userId, { name: item.name, month: item.month, amount: item.amount });
+              const res = await db.annual.insert(userId, { name: item.name, month: item.month, amount: item.amount });
+              checkError(res, "importazione spesa annuale");
             }
           }
 
@@ -866,18 +893,21 @@ function renderSettings() {
           const today = new Date();
           const currentMonth = today.getMonth() + 1;
           const currentYear = today.getFullYear();
-          const { data: currentPlanned } = await db.planned.list(userId, currentMonth, currentYear);
-          for (const item of currentPlanned) {
-            await db.planned.delete(userId, item.id);
+          const { data: currentPlanned, error: listPlannedErr } = await db.planned.list(userId, currentMonth, currentYear);
+          if (!listPlannedErr) {
+            for (const item of currentPlanned) {
+              await db.planned.delete(userId, item.id);
+            }
           }
           if (data.plannedExpenses) {
             for (const item of data.plannedExpenses) {
-              await db.planned.insert(userId, {
+              const res = await db.planned.insert(userId, {
                 name: item.name,
                 amount: item.amount,
                 month: currentMonth,
                 year: currentYear
               });
+              checkError(res, "importazione spesa variabile");
             }
           }
 
@@ -954,10 +984,12 @@ function showEditResiduoModal() {
     e.preventDefault();
     const val = parseFloat(document.getElementById('residuo-val').value);
     
-    await db.profile.update(state.user.id, { current_balance: val });
-    await fetchAllData();
-    closeModal();
-    renderDashboard();
+    const res = await db.profile.update(state.user.id, { current_balance: val });
+    if (checkError(res, "salvataggio residuo")) {
+      await fetchAllData();
+      closeModal();
+      renderDashboard();
+    }
   });
 }
 
@@ -996,16 +1028,17 @@ function showAddPlannedModal() {
     const amount = parseFloat(document.getElementById('planned-amount').value);
     
     const today = new Date();
-    await db.planned.insert(state.user.id, {
+    const res = await db.planned.insert(state.user.id, {
       name,
       amount,
       month: today.getMonth() + 1,
       year: today.getFullYear()
     });
-    
-    await fetchAllData();
-    closeModal();
-    renderDashboard();
+    if (checkError(res, "inserimento spesa variabile")) {
+      await fetchAllData();
+      closeModal();
+      renderDashboard();
+    }
   });
 }
 
@@ -1052,10 +1085,12 @@ function showAddMonthlyModal() {
     const day = parseInt(document.getElementById('monthly-day').value);
     const amount = parseFloat(document.getElementById('monthly-amount').value);
     
-    await db.monthly.insert(state.user.id, { name, day, amount });
-    await fetchAllData();
-    closeModal();
-    renderMonthly();
+    const res = await db.monthly.insert(state.user.id, { name, day, amount });
+    if (checkError(res, "inserimento spesa mensile")) {
+      await fetchAllData();
+      closeModal();
+      renderMonthly();
+    }
   });
 }
 
@@ -1115,10 +1150,12 @@ function showAddAnnualModal() {
     const month = parseInt(document.getElementById('annual-month').value);
     const amount = parseFloat(document.getElementById('annual-amount').value);
     
-    await db.annual.insert(state.user.id, { name, month, amount });
-    await fetchAllData();
-    closeModal();
-    renderAnnual();
+    const res = await db.annual.insert(state.user.id, { name, month, amount });
+    if (checkError(res, "inserimento spesa annuale")) {
+      await fetchAllData();
+      closeModal();
+      renderAnnual();
+    }
   });
 }
 

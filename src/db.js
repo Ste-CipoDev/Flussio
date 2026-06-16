@@ -72,11 +72,16 @@ export const db = {
         });
         return () => subscription.unsubscribe();
       } else {
-        // Simple polling for state changes in demo mode
+        // Simple polling for state changes in demo mode, but only trigger if state changed
+        let lastUserJson = null;
         const interval = setInterval(async () => {
           const user = await db.auth.getUser();
-          callback(user ? 'SIGNED_IN' : 'SIGNED_OUT', user);
-        }, 1000);
+          const userJson = user ? JSON.stringify(user) : null;
+          if (userJson !== lastUserJson) {
+            lastUserJson = userJson;
+            callback(user ? 'SIGNED_IN' : 'SIGNED_OUT', user);
+          }
+        }, 500); // Check every 500ms
         return () => clearInterval(interval);
       }
     }
@@ -95,12 +100,15 @@ export const db = {
         // If profile doesn't exist yet, insert it (in case trigger fails)
         if (error && error.code === 'PGRST116') {
           const defaultProfile = { id: userId, salary_day: 27, current_balance: 0.00 };
-          const { data: newProfile } = await supabase
+          const { data: newProfile, error: insertError } = await supabase
             .from('profiles')
             .insert(defaultProfile)
             .select()
             .single();
-          return newProfile;
+          if (insertError) {
+            console.error("Errore nell'inserimento del profilo di default:", insertError);
+          }
+          return newProfile || defaultProfile;
         }
         return data;
       } else {
@@ -116,8 +124,7 @@ export const db = {
       if (isConfigured) {
         const { data, error } = await supabase
           .from('profiles')
-          .update({ ...updates, updated_at: new Date() })
-          .eq('id', userId)
+          .upsert({ id: userId, ...updates, updated_at: new Date().toISOString() })
           .select()
           .single();
         return { data, error };
