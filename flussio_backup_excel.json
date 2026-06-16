@@ -1,0 +1,56 @@
+{
+  "profile": {
+    "salary_day": 10,
+    "current_balance": 841.00
+  },
+  "monthlyCommitments": [
+    {
+      "name": "YOUTUBE MUSIC",
+      "day": 1,
+      "amount": 20.00
+    },
+    {
+      "name": "ILIAD LAVORO",
+      "day": 13,
+      "amount": 5.00
+    },
+    {
+      "name": "PRESTITO MACCHINA",
+      "day": 14,
+      "amount": 276.00
+    },
+    {
+      "name": "RATA MUTUO",
+      "day": 16,
+      "amount": 390.00
+    },
+    {
+      "name": "UTENZE ENEL",
+      "day": 24,
+      "amount": 125.00
+    },
+    {
+      "name": "ILIAD PERSONALE",
+      "day": 26,
+      "amount": 10.00
+    }
+  ],
+  "annualCommitments": [
+    {
+      "name": "BOLLO",
+      "month": 12,
+      "amount": 200.00
+    },
+    {
+      "name": "RC AUTO",
+      "month": 1,
+      "amount": 400.00
+    },
+    {
+      "name": "ASSICURAZIONE CASA (incendio)",
+      "month": 6,
+      "amount": 220.00
+    }
+  ],
+  "plannedExpenses": []
+}
