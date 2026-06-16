@@ -1,9 +1,11 @@
-const CACHE_NAME = 'moneyflow-cache-v1';
+const CACHE_NAME = 'flussio-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.svg'
+  '/favicon.svg',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 // Install Event: pre-cache critical assets
