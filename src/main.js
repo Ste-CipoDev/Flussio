@@ -862,14 +862,6 @@ function renderSettings() {
         </div>
         <input type="file" id="import-backup-file" accept="application/json, .json" style="position: absolute; inset: 0; opacity: 0; cursor: pointer;" />
       </div>
-      
-      <div class="settings-item" id="import-text-backup-btn" style="cursor: pointer;">
-        <div class="settings-item-left">
-          ${icons.fileText('w-5 h-5')}
-          <span class="settings-item-title">Importa da Testo (Copia/Incolla)</span>
-        </div>
-        <span style="font-size: 0.85rem; color: var(--text-muted);">${icons.plus('w-4 h-4')}</span>
-      </div>
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem;">
@@ -965,11 +957,6 @@ function renderSettings() {
       }
     };
     reader.readAsText(file);
-  });
-
-  // Import backup from text copy-paste
-  document.getElementById('import-text-backup-btn').addEventListener('click', () => {
-    showImportTextModal();
   });
 }
 
@@ -1208,48 +1195,6 @@ function showAddAnnualModal() {
   });
 }
 
-// Modal: Import Backup from Text Paste
-function showImportTextModal() {
-  const formHTML = `
-    <form id="import-text-form">
-      <div class="form-group">
-        <label class="form-label" for="import-json-text">Incolla il testo del backup (JSON) qui sotto:</label>
-        <div class="input-container">
-          <textarea class="input-field" id="import-json-text" rows="8" required style="font-family: monospace; font-size: 0.85rem; height: 180px; padding: 0.8rem; resize: none; border-radius: 12px; width: 100%; background-color: rgba(255,255,255,0.04); border: 1px solid var(--border-color); color: var(--text-primary);" placeholder='{ "profile": { ... } }'></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Annulla</button>
-        <button type="submit" class="btn btn-primary">Importa</button>
-      </div>
-    </form>
-  `;
-  
-  renderModalHTML('Importa da Testo', formHTML);
-  document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
-  
-  document.getElementById('import-text-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const jsonText = document.getElementById('import-json-text').value;
-    
-    try {
-      const data = JSON.parse(jsonText);
-      if (confirm('L\'importazione sovrascriverà tutti i dati correnti. Continuare?')) {
-        closeModal();
-        renderAppLoader(true);
-        const success = await executeImport(data);
-        renderAppLoader(false);
-        if (success) {
-          alert('Importazione completata con successo!');
-          await fetchAllData();
-          switchView('dashboard'); // Redirect to dashboard to see results!
-        }
-      }
-    } catch (err) {
-      alert('Errore di sintassi JSON: ' + err.message);
-    }
-  });
-}
 
 // ==========================================
 // Initialization & PWA Service Worker
