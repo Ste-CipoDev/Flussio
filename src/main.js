@@ -214,6 +214,75 @@ async function fetchAllData() {
 // DOM Rendering Functions
 // ==========================================
 
+// Shared import helper
+async function executeImport(data) {
+  const userId = state.user.id;
+  try {
+    // 1. Update Profile
+    if (data.profile) {
+      const res = await db.profile.update(userId, {
+        salary_day: data.profile.salary_day,
+        current_balance: data.profile.current_balance
+      });
+      if (!checkError(res, "importazione profilo")) return false;
+    }
+
+    // 2. Clear & Import Monthly Commitments
+    const { data: currentMonthly, error: listMonthlyErr } = await db.monthly.list(userId);
+    if (!listMonthlyErr) {
+      for (const item of currentMonthly) {
+        await db.monthly.delete(userId, item.id);
+      }
+    }
+    if (data.monthlyCommitments) {
+      for (const item of data.monthlyCommitments) {
+        const res = await db.monthly.insert(userId, { name: item.name, day: item.day, amount: item.amount });
+        if (!checkError(res, "importazione spesa mensile")) return false;
+      }
+    }
+
+    // 3. Clear & Import Annual Commitments
+    const { data: currentAnnual, error: listAnnualErr } = await db.annual.list(userId);
+    if (!listAnnualErr) {
+      for (const item of currentAnnual) {
+        await db.annual.delete(userId, item.id);
+      }
+    }
+    if (data.annualCommitments) {
+      for (const item of data.annualCommitments) {
+        const res = await db.annual.insert(userId, { name: item.name, month: item.month, amount: item.amount });
+        if (!checkError(res, "importazione spesa annuale")) return false;
+      }
+    }
+
+    // 4. Clear & Import Planned Expenses
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
+    const { data: currentPlanned, error: listPlannedErr } = await db.planned.list(userId, currentMonth, currentYear);
+    if (!listPlannedErr) {
+      for (const item of currentPlanned) {
+        await db.planned.delete(userId, item.id);
+      }
+    }
+    if (data.plannedExpenses) {
+      for (const item of data.plannedExpenses) {
+        const res = await db.planned.insert(userId, {
+          name: item.name,
+          amount: item.amount,
+          month: currentMonth,
+          year: currentYear
+        });
+        if (!checkError(res, "importazione spesa variabile")) return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    alert('Errore imprevisto durante l\'importazione: ' + err.message);
+    return false;
+  }
+}
+
 function renderAppLoader(show) {
   const loader = document.getElementById('app-loader');
   if (loader) {
@@ -789,9 +858,17 @@ function renderSettings() {
       <div class="settings-item" style="position: relative; cursor: pointer;">
         <div class="settings-item-left">
           ${icons.upload('w-5 h-5')}
-          <span class="settings-item-title">Importa Backup (JSON)</span>
+          <span class="settings-item-title">Importa da File (JSON)</span>
         </div>
-        <input type="file" id="import-backup-file" accept=".json" style="position: absolute; inset: 0; opacity: 0; cursor: pointer;" />
+        <input type="file" id="import-backup-file" accept="application/json, .json" style="position: absolute; inset: 0; opacity: 0; cursor: pointer;" />
+      </div>
+      
+      <div class="settings-item" id="import-text-backup-btn" style="cursor: pointer;">
+        <div class="settings-item-left">
+          ${icons.fileText('w-5 h-5')}
+          <span class="settings-item-title">Importa da Testo (Copia/Incolla)</span>
+        </div>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">${icons.plus('w-4 h-4')}</span>
       </div>
     </div>
 
@@ -840,7 +917,7 @@ function renderSettings() {
     downloadAnchor.remove();
   });
 
-  // Import backup
+  // Import backup from file
   document.getElementById('import-backup-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -850,77 +927,26 @@ function renderSettings() {
       try {
         const data = JSON.parse(event.target.result);
         if (confirm('L\'importazione sovrascriverà tutti i dati correnti. Continuare?')) {
-          const userId = state.user.id;
-
-          // 1. Update Profile
-          if (data.profile) {
-            const res = await db.profile.update(userId, {
-              salary_day: data.profile.salary_day,
-              current_balance: data.profile.current_balance
-            });
-            checkError(res, "importazione profilo");
+          renderAppLoader(true);
+          const success = await executeImport(data);
+          renderAppLoader(false);
+          if (success) {
+            alert('Importazione completata con successo!');
+            await fetchAllData();
+            switchView('dashboard'); // Redirect to dashboard to see results!
           }
-
-          // 2. Clear & Import Monthly Commitments
-          const { data: currentMonthly, error: listMonthlyErr } = await db.monthly.list(userId);
-          if (!listMonthlyErr) {
-            for (const item of currentMonthly) {
-              await db.monthly.delete(userId, item.id);
-            }
-          }
-          if (data.monthlyCommitments) {
-            for (const item of data.monthlyCommitments) {
-              const res = await db.monthly.insert(userId, { name: item.name, day: item.day, amount: item.amount });
-              checkError(res, "importazione spesa mensile");
-            }
-          }
-
-          // 3. Clear & Import Annual Commitments
-          const { data: currentAnnual, error: listAnnualErr } = await db.annual.list(userId);
-          if (!listAnnualErr) {
-            for (const item of currentAnnual) {
-              await db.annual.delete(userId, item.id);
-            }
-          }
-          if (data.annualCommitments) {
-            for (const item of data.annualCommitments) {
-              const res = await db.annual.insert(userId, { name: item.name, month: item.month, amount: item.amount });
-              checkError(res, "importazione spesa annuale");
-            }
-          }
-
-          // 4. Clear & Import Planned Expenses
-          const today = new Date();
-          const currentMonth = today.getMonth() + 1;
-          const currentYear = today.getFullYear();
-          const { data: currentPlanned, error: listPlannedErr } = await db.planned.list(userId, currentMonth, currentYear);
-          if (!listPlannedErr) {
-            for (const item of currentPlanned) {
-              await db.planned.delete(userId, item.id);
-            }
-          }
-          if (data.plannedExpenses) {
-            for (const item of data.plannedExpenses) {
-              const res = await db.planned.insert(userId, {
-                name: item.name,
-                amount: item.amount,
-                month: currentMonth,
-                year: currentYear
-              });
-              checkError(res, "importazione spesa variabile");
-            }
-          }
-
-          alert('Importazione completata con successo!');
-          await fetchAllData();
-          renderSettings();
         }
       } catch (err) {
-        alert('Errore durante l\'importazione. Il file potrebbe non essere valido.');
+        alert('Errore durante l\'importazione: il file JSON non è valido.');
         console.error(err);
       }
     };
     reader.readAsText(file);
+  });
+
+  // Import backup from text copy-paste
+  document.getElementById('import-text-backup-btn').addEventListener('click', () => {
+    showImportTextModal();
   });
 }
 
@@ -1155,6 +1181,49 @@ function showAddAnnualModal() {
       await fetchAllData();
       closeModal();
       renderAnnual();
+    }
+  });
+}
+
+// Modal: Import Backup from Text Paste
+function showImportTextModal() {
+  const formHTML = `
+    <form id="import-text-form">
+      <div class="form-group">
+        <label class="form-label" for="import-json-text">Incolla il testo del backup (JSON) qui sotto:</label>
+        <div class="input-container">
+          <textarea class="input-field" id="import-json-text" rows="8" required style="font-family: monospace; font-size: 0.85rem; height: 180px; padding: 0.8rem; resize: none; border-radius: 12px; width: 100%; background-color: rgba(255,255,255,0.04); border: 1px solid var(--border-color); color: var(--text-primary);" placeholder='{ "profile": { ... } }'></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Annulla</button>
+        <button type="submit" class="btn btn-primary">Importa</button>
+      </div>
+    </form>
+  `;
+  
+  renderModalHTML('Importa da Testo', formHTML);
+  document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+  
+  document.getElementById('import-text-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const jsonText = document.getElementById('import-json-text').value;
+    
+    try {
+      const data = JSON.parse(jsonText);
+      if (confirm('L\'importazione sovrascriverà tutti i dati correnti. Continuare?')) {
+        closeModal();
+        renderAppLoader(true);
+        const success = await executeImport(data);
+        renderAppLoader(false);
+        if (success) {
+          alert('Importazione completata con successo!');
+          await fetchAllData();
+          switchView('dashboard'); // Redirect to dashboard to see results!
+        }
+      }
+    } catch (err) {
+      alert('Errore di sintassi JSON: ' + err.message);
     }
   });
 }
