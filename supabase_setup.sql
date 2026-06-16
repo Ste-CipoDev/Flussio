@@ -1,4 +1,4 @@
--- MONEYFLOW DATABASE SETUP SCRIPT
+-- FLUSSIO DATABASE SETUP SCRIPT
 -- Copy and paste this script in your Supabase SQL Editor to set up all tables and security policies.
 
 -- 1. Create Profiles Table (user settings & balance)

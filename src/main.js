@@ -222,7 +222,7 @@ function initAppShell() {
         <div class="auth-card">
           <div class="auth-logo">
             ${icons.wallet('w-12 h-12 mx-auto')}
-            <h1>MoneyFlow</h1>
+            <h1>Flussio</h1>
             <p>Gestisci le tue spese con stile</p>
           </div>
           
@@ -306,7 +306,7 @@ function initAppShell() {
         <header class="app-header">
           <div class="app-title-logo">
             ${icons.wallet('w-6 h-6')}
-            <h2>MoneyFlow</h2>
+            <h2>Flussio</h2>
             ${!isConfigured ? '<span class="demo-badge">Demo</span>' : ''}
           </div>
           <button id="header-logout-btn" class="action-icon" title="Esci">
@@ -814,7 +814,7 @@ function renderSettings() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `moneyflow_backup_${formatDate(new Date()).replace(/\//g, '-')}.json`);
+    downloadAnchor.setAttribute("download", `flussio_backup_${formatDate(new Date()).replace(/\//g, '-')}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();

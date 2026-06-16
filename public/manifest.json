@@ -1,6 +1,6 @@
 {
-  "name": "MoneyFlow - Gestione Spese",
-  "short_name": "MoneyFlow",
+  "name": "Flussio - Gestione Spese",
+  "short_name": "Flussio",
   "description": "Gestisci i tuoi impegni mensili e scopri quanto ti rimane fino al prossimo stipendio.",
   "start_url": "/",
   "display": "standalone",
