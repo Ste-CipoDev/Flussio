@@ -1,12 +1,27 @@
 {
+  "id": "https://flussio.vercel.app/",
   "name": "Flussio - Gestione Spese",
   "short_name": "Flussio",
   "description": "Gestisci i tuoi impegni mensili e scopri quanto ti rimane fino al prossimo stipendio.",
+  "lang": "it",
+  "dir": "ltr",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#121316",
-  "theme_color": "#121316",
+  "display_override": [
+    "standalone",
+    "window-controls-overlay",
+    "minimal-ui"
+  ],
+  "background_color": "#050506",
+  "theme_color": "#050506",
   "orientation": "portrait-primary",
+  "categories": [
+    "finance",
+    "utilities"
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
   "icons": [
     {
       "src": "favicon.svg",
@@ -26,5 +41,59 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "screenshot-mobile.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Flussio Dashboard su Mobile"
+    },
+    {
+      "src": "screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Flussio Dashboard su Desktop"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "./#dashboard",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Mensili",
+      "short_name": "Mensili",
+      "url": "./#monthly",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Annuali",
+      "short_name": "Annuali",
+      "url": "./#annual",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  }
 }
