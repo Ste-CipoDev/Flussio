@@ -420,23 +420,23 @@ export function renderAnnual() {
       const isDueThisMonth = item.month === currentMonth;
       const isConfirmed = store.state.annualStatus.some(s => s.annual_commitment_id === item.id);
       
-      let borderStyle = '';
+      let cardStatusClass = '';
       let badgeHtml = '';
       let checkActionClass = '';
       
       if (isDueThisMonth) {
         if (isConfirmed) {
-          borderStyle = 'border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.05);';
+          cardStatusClass = 'status-confirmed';
           badgeHtml = '<span class="item-badge paid">Pagato</span>';
           checkActionClass = 'confirmed';
         } else {
-          borderStyle = 'border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.05);';
+          cardStatusClass = 'status-due';
           badgeHtml = '<span class="item-badge unpaid">Scadenza Questo Mese!</span>';
         }
       }
 
       return `
-        <div class="item-card" style="${borderStyle}">
+        <div class="item-card ${cardStatusClass}">
           <div class="item-info">
             <span class="item-title">${item.name}</span>
             <span class="item-subtitle">Mese di pagamento: <strong>${getMonthName(item.month)}</strong> ${badgeHtml}</span>
@@ -575,11 +575,11 @@ export function renderSettings() {
       </div>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem;">
-      <button id="logout-btn" class="btn btn-secondary" style="color: var(--text-primary);">
+    <div class="settings-actions-group" style="margin-top: 1.5rem;">
+      <button id="logout-btn" class="btn btn-secondary">
         ${icons.logout('w-5 h-5')} Disconnetti Account
       </button>
-      <button id="delete-account-btn" class="btn btn-secondary" style="color: var(--accent-red); border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">
+      <button id="delete-account-btn" class="btn btn-secondary btn-danger-outline">
         ${icons.trash('w-5 h-5')} Elimina Account e Dati
       </button>
     </div>

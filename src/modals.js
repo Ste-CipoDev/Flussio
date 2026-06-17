@@ -18,7 +18,7 @@ export function renderModalHTML(title, formHTML) {
       <div class="modal-content">
         <div class="modal-header">
           <h3>${title}</h3>
-          <button class="modal-close" id="modal-close-btn">${icons.plus('w-6 h-6 transform rotate-45')}</button>
+          <button class="modal-close" id="modal-close-btn">${icons.close('w-5 h-5')}</button>
         </div>
         ${formHTML}
       </div>
@@ -174,7 +174,7 @@ export function showAddAnnualModal(onSuccess) {
         <label class="form-label" for="annual-month">Mese di pagamento</label>
         <div class="input-container">
           ${icons.calendar('input-icon')}
-          <select class="input-field" id="annual-month" required style="padding-left: 2.8rem;">
+          <select class="input-field input-select-month" id="annual-month" required>
             <option value="1">Gennaio</option>
             <option value="2">Febbraio</option>
             <option value="3">Marzo</option>

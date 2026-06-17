@@ -17,14 +17,25 @@ function initAppShell() {
   if (!app) return;
   
   if (!state.user) {
+    // Avoid re-rendering if auth screen is already displayed with the correct mode
+    const isAuthRendered = document.querySelector('.auth-container');
+    const currentMode = document.getElementById('auth-submit-btn')?.innerText;
+    const expectedModeText = state.isAuthMode === 'login' ? 'Accedi' : 'Registrati';
+    
+    if (isAuthRendered && currentMode === expectedModeText) {
+      return;
+    }
+
     // Render Auth screen
     app.innerHTML = `
       <div class="auth-container">
         <div class="auth-card">
           <div class="auth-logo">
-            ${icons.wallet('w-12 h-12 mx-auto')}
-            <h1>Flussio</h1>
-            <p>Gestisci le tue spese con stile</p>
+            <div class="logo-badge-luxury">
+              ${icons.wallet('w-6 h-6')}
+            </div>
+            <h1 class="logo-title-luxury">FLUSSIO</h1>
+            <p class="logo-subtitle-luxury">PREMIUM PERSONAL FINANCE</p>
           </div>
           
           <form id="auth-form">
@@ -57,9 +68,9 @@ function initAppShell() {
           
           ${!isConfigured ? `
             <div class="demo-badge-container text-center mt-6" style="margin-top: 1.5rem; text-align: center;">
-              <span class="demo-badge" style="background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border-color: rgba(239, 68, 68, 0.4);">Errore di Configurazione</span>
+              <span class="demo-badge" style="background: rgba(197, 168, 128, 0.15); color: var(--accent-gold); border-color: rgba(197, 168, 128, 0.3);">Modalità Locale Attiva</span>
               <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
-                Le chiavi del server non sono configurate. Contatta l'amministratore o verifica le variabili d'ambiente.
+                I parametri server non sono configurati. Le tue spese verranno salvate sul dispositivo corrente in modalità locale.
               </p>
             </div>
           ` : ''}
@@ -84,11 +95,11 @@ function initAppShell() {
       
       try {
         if (state.isAuthMode === 'login') {
-          const { error } = await db.auth.signIn(email, password);
-          if (error) alert(`Errore: ${error.message}`);
+          const res = await db.auth.signIn(email, password);
+          if (res.error) alert(`Errore: ${res.error.message}`);
         } else {
-          const { error } = await db.auth.signUp(email, password);
-          if (error) alert(`Errore: ${error.message}`);
+          const res = await db.auth.signUp(email, password);
+          if (res.error) alert(`Errore: ${res.error.message}`);
           else alert('Registrazione completata! Ora puoi accedere.');
         }
       } catch (err) {
@@ -100,6 +111,11 @@ function initAppShell() {
     });
     
   } else {
+    // Avoid re-rendering shell if it's already mounted
+    if (document.querySelector('.app-container')) {
+      return;
+    }
+
     // Render Authenticated App Shell
     app.innerHTML = `
       <div class="app-container">
@@ -108,7 +124,7 @@ function initAppShell() {
           <div class="app-title-logo">
             ${icons.wallet('w-6 h-6')}
             <h2>Flussio</h2>
-            ${!isConfigured ? '<span class="demo-badge" style="background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border-color: rgba(239, 68, 68, 0.4);">Non Connesso</span>' : ''}
+            ${!isConfigured ? '<span class="demo-badge" style="background: rgba(197, 168, 128, 0.15); color: var(--accent-gold); border-color: rgba(197, 168, 128, 0.3);">Modo Locale</span>' : ''}
           </div>
           <button id="header-logout-btn" class="action-icon" title="Esci">
             ${icons.logout('w-5 h-5')}
@@ -178,29 +194,68 @@ function initAppShell() {
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
+      navigator.serviceWorker.register('./sw.js')
         .then((reg) => {
           console.log('Service Worker registrato con successo. Scope:', reg.scope);
+          
+          // Detect service worker updates and prompt reload
+          reg.onupdatefound = () => {
+            const installingWorker = reg.installing;
+            if (installingWorker) {
+              installingWorker.onstatechange = () => {
+                if (installingWorker.state === 'installed') {
+                  if (navigator.serviceWorker.controller) {
+                    if (confirm('Nuova versione di Flussio disponibile! Ricaricare la pagina per aggiornare?')) {
+                      window.location.reload();
+                    }
+                  }
+                }
+              };
+            }
+          };
         })
         .catch((err) => {
           console.warn('Registrazione del Service Worker fallita:', err);
         });
     });
+
+    // Reload page when the active service worker changes
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
   }
 }
 
-// Listen to auth state changes
+// Listen to auth state changes and prevent shell redrawing on minor events
+let lastUserId = null;
+
 db.auth.onAuthStateChange(async (event, user) => {
+  const userChanged = !lastUserId || (user && user.id !== lastUserId);
   state.user = user;
+  
   if (user) {
-    renderAppLoader(true);
-    await fetchAllData();
-    renderAppLoader(false);
+    lastUserId = user.id;
+    if (userChanged) {
+      renderAppLoader(true);
+      await fetchAllData();
+      renderAppLoader(false);
+      initAppShell();
+    } else if (event !== 'TOKEN_REFRESHED') {
+      // Silent updates for minor events
+      fetchAllData().then(() => {
+        switchView(state.activeView);
+      });
+    }
   } else {
+    lastUserId = null;
     state.isLoading = false;
     renderAppLoader(false);
+    initAppShell();
   }
-  initAppShell();
 });
 
 // Register SW

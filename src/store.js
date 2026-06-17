@@ -30,25 +30,40 @@ export function checkError(result, actionName) {
   return true;
 }
 
+// Sanitize text inputs to prevent XSS
+export function sanitizeText(str) {
+  if (typeof str !== 'string') return '';
+  return str.trim().replace(/[&<>"']/g, (match) => {
+    const escapes = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#x27;'
+    };
+    return escapes[match];
+  });
+}
+
 // ==========================================
 // Core Calculations
 // ==========================================
 export function calculateMetrics() {
-  const residuo = parseFloat(state.profile.current_balance || 0);
+  const residuo = Math.round(parseFloat(state.profile.current_balance || 0) * 100) / 100;
   
   // 1. Spese Rimanenti
-  const speseRimanenti = state.monthlyCommitments
+  const speseRimanenti = Math.round(state.monthlyCommitments
     .filter(item => isExpenseRemaining(item.day, state.profile.salary_day))
-    .reduce((sum, item) => sum + parseFloat(item.amount), 0);
+    .reduce((sum, item) => sum + parseFloat(item.amount), 0) * 100) / 100;
   
   // 2. Residuo Mese
-  const residuoMese = residuo - speseRimanenti;
+  const residuoMese = Math.round((residuo - speseRimanenti) * 100) / 100;
   
   // 3. Altre Spese in Programma (Planned)
-  const altreSpese = state.plannedExpenses.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+  const altreSpese = Math.round(state.plannedExpenses.reduce((sum, item) => sum + parseFloat(item.amount), 0) * 100) / 100;
   
   // 4. Rimanenza Mensile
-  const rimanenzaMensile = residuoMese - altreSpese;
+  const rimanenzaMensile = Math.round((residuoMese - altreSpese) * 100) / 100;
   
   return {
     residuo,
@@ -60,7 +75,7 @@ export function calculateMetrics() {
 }
 
 // ==========================================
-// Fetching Data
+// Fetching Data (Optimized with Promise.all)
 // ==========================================
 export async function fetchAllData() {
   if (!state.user) return;
@@ -72,41 +87,36 @@ export async function fetchAllData() {
     const currentMonth = today.getMonth() + 1; // 1-12
     const currentYear = today.getFullYear();
     
-    // Fetch profile (salary settings & current balance)
-    const profile = await db.profile.get(userId);
+    // Fetch all resources in parallel
+    const [profile, monthlyRes, annualRes, annualStatusRes, plannedRes] = await Promise.all([
+      db.profile.get(userId),
+      db.monthly.list(userId),
+      db.annual.list(userId),
+      db.annualStatus.list(userId, currentYear),
+      db.planned.list(userId, currentMonth, currentYear)
+    ]);
+    
     state.profile = profile || { salary_day: 27, current_balance: 0 };
-    
-    // Fetch monthly commitments
-    const { data: monthly } = await db.monthly.list(userId);
-    state.monthlyCommitments = monthly;
-    
-    // Fetch annual commitments
-    const { data: annual } = await db.annual.list(userId);
-    state.annualCommitments = annual;
-    
-    // Fetch annual payments status for current year
-    const { data: annualStatus } = await db.annualStatus.list(userId, currentYear);
-    state.annualStatus = annualStatus;
-    
-    // Fetch planned expenses for current month
-    const { data: planned } = await db.planned.list(userId, currentMonth, currentYear);
-    state.plannedExpenses = planned;
+    state.monthlyCommitments = monthlyRes.data || [];
+    state.annualCommitments = annualRes.data || [];
+    state.annualStatus = annualStatusRes.data || [];
+    state.plannedExpenses = plannedRes.data || [];
     
   } catch (err) {
-    console.error('Error fetching data:', err);
+    console.error('Error fetching data in parallel:', err);
   } finally {
     state.isLoading = false;
   }
 }
 
 // ==========================================
-// DB Wrappers
+// DB Wrappers (Optimistic Local State Update)
 // ==========================================
 export async function updateProfile(updates) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const res = await db.profile.update(state.user.id, updates);
   if (checkError(res, "salvataggio profilo")) {
-    await fetchAllData();
+    state.profile = { ...state.profile, ...res.data };
     return res;
   }
   return res;
@@ -114,9 +124,11 @@ export async function updateProfile(updates) {
 
 export async function insertMonthly({ name, day, amount }) {
   if (!state.user) return { error: new Error("Utente non loggato") };
-  const res = await db.monthly.insert(state.user.id, { name, day, amount });
-  if (checkError(res, "inserimento spesa fissa")) {
-    await fetchAllData();
+  const sanitizedName = sanitizeText(name);
+  const res = await db.monthly.insert(state.user.id, { name: sanitizedName, day, amount });
+  if (checkError(res, "inserimento spesa fisse")) {
+    state.monthlyCommitments.push(res.data);
+    state.monthlyCommitments.sort((a, b) => a.day - b.day);
     return res;
   }
   return res;
@@ -126,7 +138,7 @@ export async function deleteMonthly(id) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const res = await db.monthly.delete(state.user.id, id);
   if (checkError(res, "eliminazione spesa fissa")) {
-    await fetchAllData();
+    state.monthlyCommitments = state.monthlyCommitments.filter(item => item.id !== id);
     return res;
   }
   return res;
@@ -134,9 +146,11 @@ export async function deleteMonthly(id) {
 
 export async function insertAnnual({ name, month, amount }) {
   if (!state.user) return { error: new Error("Utente non loggato") };
-  const res = await db.annual.insert(state.user.id, { name, month, amount });
+  const sanitizedName = sanitizeText(name);
+  const res = await db.annual.insert(state.user.id, { name: sanitizedName, month, amount });
   if (checkError(res, "inserimento spesa annuale")) {
-    await fetchAllData();
+    state.annualCommitments.push(res.data);
+    state.annualCommitments.sort((a, b) => a.month - b.month);
     return res;
   }
   return res;
@@ -146,7 +160,8 @@ export async function deleteAnnual(id) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const res = await db.annual.delete(state.user.id, id);
   if (checkError(res, "eliminazione spesa annuale")) {
-    await fetchAllData();
+    state.annualCommitments = state.annualCommitments.filter(item => item.id !== id);
+    state.annualStatus = state.annualStatus.filter(item => item.annual_commitment_id !== id);
     return res;
   }
   return res;
@@ -156,7 +171,7 @@ export async function confirmAnnual(annualCommitmentId, year) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const res = await db.annualStatus.confirm(state.user.id, annualCommitmentId, year);
   if (checkError(res, "conferma pagamento annuale")) {
-    await fetchAllData();
+    state.annualStatus.push(res.data);
     return res;
   }
   return res;
@@ -166,7 +181,9 @@ export async function unconfirmAnnual(annualCommitmentId, year) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const res = await db.annualStatus.unconfirm(state.user.id, annualCommitmentId, year);
   if (checkError(res, "annullamento pagamento annuale")) {
-    await fetchAllData();
+    state.annualStatus = state.annualStatus.filter(
+      item => !(item.annual_commitment_id === annualCommitmentId && item.year === parseInt(year))
+    );
     return res;
   }
   return res;
@@ -174,15 +191,10 @@ export async function unconfirmAnnual(annualCommitmentId, year) {
 
 export async function insertPlanned({ name, amount }) {
   if (!state.user) return { error: new Error("Utente non loggato") };
-  const today = new Date();
-  const res = await db.planned.insert(state.user.id, {
-    name,
-    amount,
-    month: today.getMonth() + 1,
-    year: today.getFullYear()
-  });
+  const sanitizedName = sanitizeText(name);
+  const res = await db.planned.insert(state.user.id, { name: sanitizedName, amount });
   if (checkError(res, "inserimento spesa variabile")) {
-    await fetchAllData();
+    state.plannedExpenses.push(res.data);
     return res;
   }
   return res;
@@ -192,16 +204,19 @@ export async function deletePlanned(id) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const res = await db.planned.delete(state.user.id, id);
   if (checkError(res, "eliminazione spesa variabile")) {
-    await fetchAllData();
+    state.plannedExpenses = state.plannedExpenses.filter(item => item.id !== id);
     return res;
   }
   return res;
 }
 
+// ==========================================
+// Bulk Import (Optimized to avoid N HTTP calls)
+// ==========================================
 export async function executeImport(data) {
   const userId = state.user.id;
   try {
-    // 1. Update Profile
+    // 1. Update Profile (Upsert)
     if (data.profile) {
       const res = await db.profile.update(userId, {
         salary_day: data.profile.salary_day,
@@ -210,55 +225,52 @@ export async function executeImport(data) {
       if (!checkError(res, "importazione profilo")) return false;
     }
 
-    // 2. Clear & Import Monthly Commitments
-    const { data: currentMonthly, error: listMonthlyErr } = await db.monthly.list(userId);
-    if (!listMonthlyErr) {
-      for (const item of currentMonthly) {
-        await db.monthly.delete(userId, item.id);
-      }
-    }
-    if (data.monthlyCommitments) {
-      for (const item of data.monthlyCommitments) {
-        const res = await db.monthly.insert(userId, { name: item.name, day: item.day, amount: item.amount });
-        if (!checkError(res, "importazione spesa mensile")) return false;
-      }
-    }
-
-    // 3. Clear & Import Annual Commitments
-    const { data: currentAnnual, error: listAnnualErr } = await db.annual.list(userId);
-    if (!listAnnualErr) {
-      for (const item of currentAnnual) {
-        await db.annual.delete(userId, item.id);
-      }
-    }
-    if (data.annualCommitments) {
-      for (const item of data.annualCommitments) {
-        const res = await db.annual.insert(userId, { name: item.name, month: item.month, amount: item.amount });
-        if (!checkError(res, "importazione spesa annuale")) return false;
-      }
+    // 2. Clear & Import Monthly Commitments (Bulk - 2 HTTP calls instead of 2 * N)
+    const clearMonthlyRes = await db.monthly.clear(userId);
+    if (!checkError(clearMonthlyRes, "pulizia spese mensili")) return false;
+    
+    if (data.monthlyCommitments && data.monthlyCommitments.length > 0) {
+      // Sanitize names during import
+      const sanitizedMonthly = data.monthlyCommitments.map(item => ({
+        ...item,
+        name: sanitizeText(item.name)
+      }));
+      const res = await db.monthly.insertBulk(userId, sanitizedMonthly);
+      if (!checkError(res, "importazione spese mensili")) return false;
     }
 
-    // 4. Clear & Import Planned Expenses
+    // 3. Clear & Import Annual Commitments (Bulk)
+    const clearAnnualRes = await db.annual.clear(userId);
+    if (!checkError(clearAnnualRes, "pulizia spese annuali")) return false;
+
+    if (data.annualCommitments && data.annualCommitments.length > 0) {
+      const sanitizedAnnual = data.annualCommitments.map(item => ({
+        ...item,
+        name: sanitizeText(item.name)
+      }));
+      const res = await db.annual.insertBulk(userId, sanitizedAnnual);
+      if (!checkError(res, "importazione spese annuale")) return false;
+    }
+
+    // 4. Clear & Import Planned Expenses (Bulk)
     const today = new Date();
     const currentMonth = today.getMonth() + 1;
     const currentYear = today.getFullYear();
-    const { data: currentPlanned, error: listPlannedErr } = await db.planned.list(userId, currentMonth, currentYear);
-    if (!listPlannedErr) {
-      for (const item of currentPlanned) {
-        await db.planned.delete(userId, item.id);
-      }
+    const clearPlannedRes = await db.planned.clear(userId, currentMonth, currentYear);
+    if (!checkError(clearPlannedRes, "pulizia spese variabili")) return false;
+
+    if (data.plannedExpenses && data.plannedExpenses.length > 0) {
+      const formattedPlanned = data.plannedExpenses.map(item => ({
+        name: sanitizeText(item.name),
+        amount: item.amount,
+        month: currentMonth,
+        year: currentYear
+      }));
+      const res = await db.planned.insertBulk(userId, formattedPlanned);
+      if (!checkError(res, "importazione spesa variabile")) return false;
     }
-    if (data.plannedExpenses) {
-      for (const item of data.plannedExpenses) {
-        const res = await db.planned.insert(userId, {
-          name: item.name,
-          amount: item.amount,
-          month: currentMonth,
-          year: currentYear
-        });
-        if (!checkError(res, "importazione spesa variabile")) return false;
-      }
-    }
+
+    // Refresh memory cache in a single run
     await fetchAllData();
     return true;
   } catch (err) {
