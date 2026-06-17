@@ -28,3 +28,13 @@ dist-ssr
 
 # Local App Store Assets
 /appstore-images/
+
+# Android TWA Build and Keys
+twa/.gradle/
+twa/build/
+twa/app/build/
+twa/*.keystore
+twa/*.apk
+twa/*.aab
+twa/*.idsig
+

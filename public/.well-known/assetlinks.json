@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "it.cipo.flussio",
+      "sha256_cert_fingerprints": [
+        "8A:FA:1E:DC:A6:9D:61:E0:C1:A4:F2:8D:2D:63:74:D8:30:C5:E2:40:68:75:B3:96:32:00:48:2A:5E:EE:52:BF"
+      ]
+    }
+  }
+]
