@@ -814,3 +814,205 @@ h1, h2, h3, h4, .font-display {
     transform: scale(1);
   }
 }
+
+/* Chart Card & Layout */
+.chart-section-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-header h4 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Segmented Control for Toggle */
+.chart-toggle-control {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 2px;
+  display: inline-flex;
+}
+
+.chart-toggle-control .toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.chart-toggle-control .toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.chart-toggle-control .toggle-btn.active {
+  background-color: var(--accent-gold);
+  color: #000;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Empty Chart State */
+.chart-empty-state {
+  text-align: center;
+  padding: 1.5rem 0;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+}
+
+/* Bar Chart Styles */
+.bar-chart-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.bar-chart-track {
+  height: 12px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.bar-segment {
+  height: 100%;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bar-segment.fixed {
+  background: linear-gradient(90deg, var(--accent-orange), #f97316);
+}
+
+.bar-segment.variable {
+  background: linear-gradient(90deg, var(--accent-gold), #fbbf24);
+}
+
+.bar-segment.free {
+  background: linear-gradient(90deg, var(--accent-green), #34d399);
+}
+
+.bar-chart-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.legend-item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-item .dot.fixed { background-color: var(--accent-orange); }
+.legend-item .dot.variable { background-color: var(--accent-gold); }
+.legend-item .dot.free { background-color: var(--accent-green); }
+
+/* Donut Chart SVG Styles */
+.donut-chart-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.donut-chart-svg-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  width: 130px;
+  height: 130px;
+}
+
+.donut-chart-svg {
+  filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.2));
+}
+
+.donut-track {
+  stroke: rgba(255, 255, 255, 0.03);
+}
+
+.donut-indicator {
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.donut-text-val {
+  font-family: 'Outfit', sans-serif;
+  fill: var(--text-primary);
+}
+
+.donut-text-lbl {
+  font-family: 'Inter', sans-serif;
+  fill: var(--text-muted);
+}
+
+.donut-chart-legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.donut-chart-legend .legend-title {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.donut-chart-legend .legend-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.donut-chart-legend .legend-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+@media(max-width: 360px) {
+  .donut-chart-wrapper {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+}
+
