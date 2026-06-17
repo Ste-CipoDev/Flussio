@@ -13,8 +13,8 @@
   --accent-green-bg: rgba(16, 185, 129, 0.15);
   --accent-red: #f43f5e; /* Crimson red */
   --accent-red-bg: rgba(244, 63, 94, 0.15);
-  --accent-orange: #f97316;
-  --accent-orange-bg: rgba(249, 115, 22, 0.15);
+  --accent-orange: #ff5a36; /* Reddish orange */
+  --accent-orange-bg: rgba(255, 90, 54, 0.15);
   
   /* Text Colors */
   --text-primary: #f8fafc;
@@ -959,7 +959,7 @@ h1, h2, h3, h4, .font-display {
 }
 
 .bar-segment.fixed {
-  background: linear-gradient(90deg, var(--accent-orange), #f97316);
+  background: linear-gradient(90deg, var(--accent-orange), #ff7e62);
 }
 
 .bar-segment.variable {
