@@ -171,7 +171,7 @@ export function showAddAnnualModal(onSuccess) {
       </div>
       
       <div class="form-group">
-        <label class="form-label" for="annual-month">Mese di addebito</label>
+        <label class="form-label" for="annual-month">Mese di pagamento</label>
         <div class="input-container">
           ${icons.calendar('input-icon')}
           <select class="input-field" id="annual-month" required style="padding-left: 2.8rem;">

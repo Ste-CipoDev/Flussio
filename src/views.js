@@ -130,64 +130,64 @@ export function renderDashboard() {
     <!-- Metrics Cards Grid -->
     <div class="summary-grid">
       <!-- Residuo Attuale -->
-      <div class="metric-card primary">
-        <span class="metric-label">Residuo Iniziale</span>
-        <div class="metric-value-row">
+      <div class="metric-card primary horizontal">
+        <div class="metric-info-col">
+          <span class="metric-label">Residuo Iniziale</span>
+          <span class="metric-details">Ultimo aggiornamento sul conto</span>
+        </div>
+        <div class="metric-value-col">
           <span class="metric-value">${formatCurrency(metrics.residuo)}</span>
           <button id="edit-residuo-btn" class="metric-action-btn" title="Modifica saldo attuale">
             ${icons.edit('w-5 h-5')}
           </button>
         </div>
-        <div class="metric-details">
-          <span>Ultimo aggiornamento sul conto</span>
-        </div>
       </div>
 
       <!-- Spese Rimanenti -->
-      <div class="metric-card warning">
-        <span class="metric-label">Spese Fisse Rimanenti</span>
-        <div class="metric-value-row">
-          <span class="metric-value">${formatCurrency(metrics.speseRimanenti)}</span>
+      <div class="metric-card warning horizontal">
+        <div class="metric-info-col">
+          <span class="metric-label">Spese Fisse Rimanenti</span>
+          <span class="metric-details">Fino al prossimo stipendio (${formatDate(nextSalaryDate)})</span>
         </div>
-        <div class="metric-details">
-          <span>Fino al prossimo stipendio (${formatDate(nextSalaryDate)})</span>
+        <div class="metric-value-col">
+          <span class="metric-value">${formatCurrency(metrics.speseRimanenti)}</span>
         </div>
       </div>
 
       <!-- Residuo Mese -->
-      <div class="metric-card">
-        <span class="metric-label">Residuo Mese</span>
-        <div class="metric-value-row">
+      <div class="metric-card horizontal">
+        <div class="metric-info-col">
+          <span class="metric-label">Residuo Mese</span>
+          <span class="metric-details">Residuo - Spese Fisse Rimanenti</span>
+        </div>
+        <div class="metric-value-col">
           <span class="metric-value" style="color: ${metrics.residuoMese >= 0 ? 'var(--text-primary)' : 'var(--accent-red)'}">
             ${formatCurrency(metrics.residuoMese)}
           </span>
         </div>
-        <div class="metric-details">
-          <span>Residuo - Spese Fisse Rimanenti</span>
-        </div>
       </div>
 
       <!-- Altre Spese / Budget -->
-      <div class="metric-card">
-        <span class="metric-label">Budget Spese Variabili</span>
-        <div class="metric-value-row">
-          <span class="metric-value" style="color: var(--text-secondary)">${formatCurrency(metrics.altreSpese)}</span>
+      <div class="metric-card horizontal">
+        <div class="metric-info-col">
+          <span class="metric-label">Budget Spese Variabili</span>
+          <span class="metric-details">Groceries, Benzina, ecc. programmate</span>
         </div>
-        <div class="metric-details">
-          <span>Groceries, Benzina, ecc. programmate</span>
+        <div class="metric-value-col">
+          <span class="metric-value" style="color: var(--text-secondary)">${formatCurrency(metrics.altreSpese)}</span>
         </div>
       </div>
 
       <!-- Rimanenza Mensile -->
-      <div class="metric-card success">
-        <span class="metric-label">Rimanenza Mensile Libera</span>
-        <div class="metric-value-row">
+      <div class="metric-card success horizontal">
+        <div class="metric-info-col">
+          <span class="metric-label">Rimanenza Mensile Libera</span>
+          <span class="metric-details">Soldi effettivamente liberi</span>
+        </div>
+        <div class="metric-value-col">
           <span class="metric-value" style="color: ${metrics.rimanenzaMensile >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">
             ${formatCurrency(metrics.rimanenzaMensile)}
           </span>
-        </div>
-        <div class="metric-details">
-          <span>Soldi effettivamente liberi</span>
         </div>
       </div>
     </div>
@@ -439,7 +439,7 @@ export function renderAnnual() {
         <div class="item-card" style="${borderStyle}">
           <div class="item-info">
             <span class="item-title">${item.name}</span>
-            <span class="item-subtitle">Mese di addebito: <strong>${getMonthName(item.month)}</strong> ${badgeHtml}</span>
+            <span class="item-subtitle">Mese di pagamento: <strong>${getMonthName(item.month)}</strong> ${badgeHtml}</span>
           </div>
           <div class="item-right">
             <span class="item-amount">${formatCurrency(item.amount)}</span>

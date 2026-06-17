@@ -379,6 +379,45 @@ h1, h2, h3, h4, .font-display {
   overflow: hidden;
 }
 
+/* Horizontal layout for metric cards */
+.metric-card.horizontal {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1.15rem; /* Tight vertical padding, spacious horizontal */
+  min-height: 72px;
+}
+
+.metric-card.horizontal .metric-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.metric-card.horizontal .metric-value-col {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: right;
+}
+
+.metric-card.horizontal .metric-label {
+  margin-bottom: 0;
+  font-size: 0.78rem;
+}
+
+.metric-card.horizontal .metric-value {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.metric-card.horizontal .metric-details {
+  margin-top: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 /* Specific theme highlights on cards */
 .metric-card.primary {
   border-color: rgba(245, 158, 11, 0.25);
