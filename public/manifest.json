@@ -24,25 +24,25 @@
   "related_applications": [],
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "https://flussio.vercel.app/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-192-maskable.png",
+      "src": "https://flussio.vercel.app/icon-192-maskable.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "https://flussio.vercel.app/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512-maskable.png",
+      "src": "https://flussio.vercel.app/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -50,14 +50,14 @@
   ],
   "screenshots": [
     {
-      "src": "screenshot-mobile.png",
+      "src": "https://flussio.vercel.app/screenshot-mobile.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Flussio Dashboard su Mobile"
     },
     {
-      "src": "screenshot-desktop.png",
+      "src": "https://flussio.vercel.app/screenshot-desktop.png",
       "sizes": "1920x1080",
       "type": "image/png",
       "form_factor": "wide",
@@ -71,7 +71,7 @@
       "url": "./#dashboard",
       "icons": [
         {
-          "src": "icon-192.png",
+          "src": "https://flussio.vercel.app/icon-192.png",
           "sizes": "192x192"
         }
       ]
@@ -82,7 +82,7 @@
       "url": "./#monthly",
       "icons": [
         {
-          "src": "icon-192.png",
+          "src": "https://flussio.vercel.app/icon-192.png",
           "sizes": "192x192"
         }
       ]
@@ -93,7 +93,7 @@
       "url": "./#annual",
       "icons": [
         {
-          "src": "icon-192.png",
+          "src": "https://flussio.vercel.app/icon-192.png",
           "sizes": "192x192"
         }
       ]
