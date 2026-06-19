@@ -54,6 +54,8 @@ export async function syncOfflineData() {
         await supabase.from('profiles').upsert(payload);
       } else if (type === 'insert_monthly') {
         await supabase.from('monthly_commitments').insert(payload);
+      } else if (type === 'update_monthly') {
+        await supabase.from('monthly_commitments').update({ name: payload.name, day: payload.day, amount: payload.amount }).eq('id', payload.id).eq('user_id', payload.user_id);
       } else if (type === 'delete_monthly') {
         await supabase.from('monthly_commitments').delete().eq('id', payload.id).eq('user_id', payload.user_id);
       } else if (type === 'insert_annual') {
@@ -273,6 +275,40 @@ export const db = {
         setLocal(cacheKey, freshList);
       }
       return { data: data || newItem, error };
+    },
+    update: async (userId, id, { name, day, amount }) => {
+      const cacheKey = `flussio_monthly_${userId}`;
+      const localList = getLocal(cacheKey, []);
+      const updatedItem = {
+        id,
+        user_id: userId,
+        name,
+        day: parseInt(day),
+        amount: parseFloat(amount),
+        created_at: new Date().toISOString()
+      };
+      
+      const newList = localList.map(item => item.id === id ? { ...item, ...updatedItem } : item);
+      newList.sort((a, b) => a.day - b.day);
+      setLocal(cacheKey, newList);
+
+      if (!isConfigured || !isOnline()) {
+        enqueueSync('update_monthly', updatedItem);
+        return { data: updatedItem, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('monthly_commitments')
+        .update({ name, day: parseInt(day), amount: parseFloat(amount) })
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+      if (!error && data) {
+        const freshList = newList.map(item => item.id === id ? data : item);
+        setLocal(cacheKey, freshList);
+      }
+      return { data: data || updatedItem, error };
     },
     delete: async (userId, id) => {
       const cacheKey = `flussio_monthly_${userId}`;

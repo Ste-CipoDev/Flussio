@@ -73,7 +73,7 @@ export function showAddPlannedModal(onSuccess) {
         <label class="form-label" for="planned-name">Nome Spesa (es. Spesa, Benzina)</label>
         <div class="input-container">
           ${icons.fileText('input-icon')}
-          <input class="input-field" type="text" id="planned-name" required placeholder="Benzina" autofocus />
+          <input class="input-field" type="text" id="planned-name" required placeholder="Benzina" maxlength="20" autofocus />
         </div>
       </div>
       
@@ -115,7 +115,7 @@ export function showAddMonthlyModal(onSuccess) {
         <label class="form-label" for="monthly-name">Nome Spesa Fissa</label>
         <div class="input-container">
           ${icons.fileText('input-icon')}
-          <input class="input-field" type="text" id="monthly-name" required placeholder="Mutuo Casa" autofocus />
+          <input class="input-field" type="text" id="monthly-name" required placeholder="Mutuo Casa" maxlength="20" autofocus />
         </div>
       </div>
       
@@ -166,7 +166,7 @@ export function showAddAnnualModal(onSuccess) {
         <label class="form-label" for="annual-name">Nome Spesa Annuale</label>
         <div class="input-container">
           ${icons.fileText('input-icon')}
-          <input class="input-field" type="text" id="annual-name" required placeholder="Bollo Auto" autofocus />
+          <input class="input-field" type="text" id="annual-name" required placeholder="Bollo Auto" maxlength="20" autofocus />
         </div>
       </div>
       
@@ -215,6 +215,57 @@ export function showAddAnnualModal(onSuccess) {
     const amount = parseFloat(document.getElementById('annual-amount').value);
     
     const res = await store.insertAnnual({ name, month, amount });
+    if (!res.error) {
+      closeModal();
+      if (onSuccess) onSuccess();
+    }
+  });
+}
+
+// Modal: Edit Monthly Commitment
+export function showEditMonthlyModal(item, onSuccess) {
+  const formHTML = `
+    <form id="edit-monthly-form">
+      <div class="form-group">
+        <label class="form-label" for="monthly-name">Nome Spesa Fissa</label>
+        <div class="input-container">
+          ${icons.fileText('input-icon')}
+          <input class="input-field" type="text" id="monthly-name" required placeholder="Mutuo Casa" value="${item.name}" maxlength="20" autofocus />
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="monthly-day">Giorno di addebito (1-31)</label>
+        <div class="input-container">
+          ${icons.calendar('input-icon')}
+          <input class="input-field" type="number" min="1" max="31" id="monthly-day" required placeholder="16" value="${item.day}" />
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="monthly-amount">Importo (€)</label>
+        <div class="input-container">
+          ${icons.euro('input-icon')}
+          <input class="input-field" type="number" step="0.01" id="monthly-amount" required placeholder="390.00" value="${item.amount}" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Annulla</button>
+        <button type="submit" class="btn btn-primary">Salva</button>
+      </div>
+    </form>
+  `;
+  
+  renderModalHTML('Modifica Spesa Mensile', formHTML);
+  document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+  
+  document.getElementById('edit-monthly-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('monthly-name').value;
+    const day = parseInt(document.getElementById('monthly-day').value);
+    const amount = parseFloat(document.getElementById('monthly-amount').value);
+    
+    const res = await store.updateMonthly(item.id, { name, day, amount });
     if (!res.error) {
       closeModal();
       if (onSuccess) onSuccess();

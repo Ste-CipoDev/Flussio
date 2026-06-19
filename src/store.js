@@ -144,6 +144,18 @@ export async function deleteMonthly(id) {
   return res;
 }
 
+export async function updateMonthly(id, { name, day, amount }) {
+  if (!state.user) return { error: new Error("Utente non loggato") };
+  const sanitizedName = sanitizeText(name);
+  const res = await db.monthly.update(state.user.id, id, { name: sanitizedName, day, amount });
+  if (checkError(res, "aggiornamento spesa fissa")) {
+    state.monthlyCommitments = state.monthlyCommitments.map(item => item.id === id ? res.data : item);
+    state.monthlyCommitments.sort((a, b) => a.day - b.day);
+    return res;
+  }
+  return res;
+}
+
 export async function insertAnnual({ name, month, amount }) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const sanitizedName = sanitizeText(name);

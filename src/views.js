@@ -349,6 +349,9 @@ export function renderMonthly() {
           </div>
           <div class="item-right">
             <span class="item-amount">${formatCurrency(item.amount)}</span>
+            <button class="action-icon edit-btn" data-id="${item.id}" title="Modifica">
+              ${icons.edit('w-4 h-4')}
+            </button>
             <button class="action-icon delete-btn" data-id="${item.id}" title="Elimina">
               ${icons.trash('w-4 h-4')}
             </button>
@@ -356,6 +359,17 @@ export function renderMonthly() {
         </div>
       `;
     }).join('');
+
+    // Attach edit listeners
+    listContainer.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const item = store.state.monthlyCommitments.find(i => i.id === id);
+        if (item) {
+          modals.showEditMonthlyModal(item, renderMonthly);
+        }
+      });
+    });
 
     // Attach delete listeners
     listContainer.querySelectorAll('.delete-btn').forEach(btn => {
