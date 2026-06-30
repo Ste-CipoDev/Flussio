@@ -40,7 +40,7 @@ export function showEditResiduoModal(onSuccess) {
         <label class="form-label" for="residuo-val">Nuovo Residuo Conto (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="number" step="0.01" id="residuo-val" value="${store.state.profile.current_balance}" required autofocus />
+          <input class="input-field" type="text" inputmode="decimal" id="residuo-val" value="${store.state.profile.current_balance}" required autofocus />
         </div>
       </div>
       <div class="modal-footer">
@@ -55,7 +55,7 @@ export function showEditResiduoModal(onSuccess) {
   
   document.getElementById('edit-residuo-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const val = parseFloat(document.getElementById('residuo-val').value);
+    const val = parseFloat(document.getElementById('residuo-val').value.replace(',', '.'));
     
     const res = await store.updateProfile({ current_balance: val });
     if (!res.error) {
@@ -81,7 +81,7 @@ export function showAddPlannedModal(onSuccess) {
         <label class="form-label" for="planned-amount">Prezzo stimato (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="number" step="0.01" id="planned-amount" required placeholder="50.00" />
+          <input class="input-field" type="text" inputmode="decimal" id="planned-amount" required placeholder="50.00" />
         </div>
       </div>
       <div class="modal-footer">
@@ -97,7 +97,7 @@ export function showAddPlannedModal(onSuccess) {
   document.getElementById('add-planned-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('planned-name').value;
-    const amount = parseFloat(document.getElementById('planned-amount').value);
+    const amount = parseFloat(document.getElementById('planned-amount').value.replace(',', '.'));
     
     const res = await store.insertPlanned({ name, amount });
     if (!res.error) {
@@ -131,7 +131,7 @@ export function showAddMonthlyModal(onSuccess) {
         <label class="form-label" for="monthly-amount">Importo (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="number" step="0.01" id="monthly-amount" required placeholder="390.00" />
+          <input class="input-field" type="text" inputmode="decimal" id="monthly-amount" required placeholder="390.00" />
         </div>
       </div>
       <div class="modal-footer">
@@ -148,7 +148,7 @@ export function showAddMonthlyModal(onSuccess) {
     e.preventDefault();
     const name = document.getElementById('monthly-name').value;
     const day = parseInt(document.getElementById('monthly-day').value);
-    const amount = parseFloat(document.getElementById('monthly-amount').value);
+    const amount = parseFloat(document.getElementById('monthly-amount').value.replace(',', '.'));
     
     const res = await store.insertMonthly({ name, day, amount });
     if (!res.error) {
@@ -195,7 +195,7 @@ export function showAddAnnualModal(onSuccess) {
         <label class="form-label" for="annual-amount">Importo (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="number" step="0.01" id="annual-amount" required placeholder="200.00" />
+          <input class="input-field" type="text" inputmode="decimal" id="annual-amount" required placeholder="200.00" />
         </div>
       </div>
       <div class="modal-footer">
@@ -212,7 +212,7 @@ export function showAddAnnualModal(onSuccess) {
     e.preventDefault();
     const name = document.getElementById('annual-name').value;
     const month = parseInt(document.getElementById('annual-month').value);
-    const amount = parseFloat(document.getElementById('annual-amount').value);
+    const amount = parseFloat(document.getElementById('annual-amount').value.replace(',', '.'));
     
     const res = await store.insertAnnual({ name, month, amount });
     if (!res.error) {
@@ -246,7 +246,7 @@ export function showEditMonthlyModal(item, onSuccess) {
         <label class="form-label" for="monthly-amount">Importo (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="number" step="0.01" id="monthly-amount" required placeholder="390.00" value="${item.amount}" />
+          <input class="input-field" type="text" inputmode="decimal" id="monthly-amount" required placeholder="390.00" value="${item.amount}" />
         </div>
       </div>
       <div class="modal-footer">
@@ -263,7 +263,7 @@ export function showEditMonthlyModal(item, onSuccess) {
     e.preventDefault();
     const name = document.getElementById('monthly-name').value;
     const day = parseInt(document.getElementById('monthly-day').value);
-    const amount = parseFloat(document.getElementById('monthly-amount').value);
+    const amount = parseFloat(document.getElementById('monthly-amount').value.replace(',', '.'));
     
     const res = await store.updateMonthly(item.id, { name, day, amount });
     if (!res.error) {

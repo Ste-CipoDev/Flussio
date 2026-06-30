@@ -11,7 +11,18 @@ export const isConfigured = !!(
   supabaseAnonKey.trim() !== ''
 );
 
-export const supabase = isConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
+export const supabase = isConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // Use sessionStorage instead of localStorage to reduce XSS exposure:
+        // the JWT token is automatically cleared when the browser tab is closed.
+        storage: window.sessionStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    })
+  : null;
 
 // Determine if browser is currently online
 function isOnline() {
@@ -93,55 +104,58 @@ if (typeof window !== 'undefined') {
 export const db = {
   auth: {
     getUser: async () => {
+      // Local mode (no Supabase configured): use localStorage as fallback
       if (!isConfigured) {
         const loggedIn = localStorage.getItem('flussio_logged_in') === 'true';
         return loggedIn ? { id: 'local-user', email: 'locale@flussio.local' } : null;
       }
       try {
+        // Supabase is the single source of truth for auth state
         const { data: { user } } = await supabase.auth.getUser();
         return user;
       } catch (err) {
-        const loggedIn = localStorage.getItem('flussio_logged_in') === 'true';
-        const cachedEmail = localStorage.getItem('flussio_cached_user_email') || 'offline@flussio.local';
-        return loggedIn ? { id: 'offline-user', email: cachedEmail } : null;
+        // Network error: try to restore from active session in sessionStorage
+        const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        return session?.user ?? null;
       }
     },
     signUp: async (email, password) => {
+      // Local mode (no Supabase configured)
       if (!isConfigured) {
         localStorage.setItem('flussio_logged_in', 'true');
         localStorage.setItem('flussio_cached_user_email', email);
-        return { data: { user: { id: 'local-user', email } }, error: null };
+        return { data: { user: { id: 'local-user', email }, session: { user: { id: 'local-user', email } } }, error: null };
       }
+      // Supabase signUp – if email confirmation is enabled, session will be null
       return await supabase.auth.signUp({ email, password });
     },
     signIn: async (email, password) => {
+      // Local mode (no Supabase configured)
       if (!isConfigured) {
         localStorage.setItem('flussio_logged_in', 'true');
         localStorage.setItem('flussio_cached_user_email', email);
         return { data: { user: { id: 'local-user', email } }, error: null };
       }
-      const res = await supabase.auth.signInWithPassword({ email, password });
-      if (!res.error && res.data?.user) {
-        localStorage.setItem('flussio_logged_in', 'true');
-        localStorage.setItem('flussio_cached_user_email', res.data.user.email);
-      }
-      return res;
+      // Token is stored in sessionStorage automatically via the client config above
+      return await supabase.auth.signInWithPassword({ email, password });
     },
     signOut: async () => {
-      localStorage.setItem('flussio_logged_in', 'false');
-      if (!isConfigured) return { error: null };
+      if (!isConfigured) {
+        localStorage.setItem('flussio_logged_in', 'false');
+        return { error: null };
+      }
+      // Supabase signOut clears the token from sessionStorage automatically
       return await supabase.auth.signOut();
     },
     onAuthStateChange: (callback) => {
+      // Local mode (no Supabase configured): use localStorage as fallback
       if (!isConfigured) {
         const getLocalUser = () => {
           const loggedIn = localStorage.getItem('flussio_logged_in') === 'true';
           const email = localStorage.getItem('flussio_cached_user_email') || 'locale@flussio.local';
           return loggedIn ? { id: 'local-user', email } : null;
         };
-        // Trigger initial check
         setTimeout(() => callback('SIGNED_IN', getLocalUser()), 0);
-        
         const storageHandler = (e) => {
           if (e.key === 'flussio_logged_in') {
             callback(e.newValue === 'true' ? 'SIGNED_IN' : 'SIGNED_OUT', getLocalUser());
@@ -150,14 +164,10 @@ export const db = {
         window.addEventListener('storage', storageHandler);
         return () => window.removeEventListener('storage', storageHandler);
       }
-      
+
+      // Supabase mode: no manual localStorage writes needed.
+      // The session is managed entirely by the Supabase client (sessionStorage).
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (session?.user) {
-          localStorage.setItem('flussio_logged_in', 'true');
-          localStorage.setItem('flussio_cached_user_email', session.user.email);
-        } else {
-          localStorage.setItem('flussio_logged_in', 'false');
-        }
         callback(event, session ? session.user : null);
       });
       return () => subscription.unsubscribe();
