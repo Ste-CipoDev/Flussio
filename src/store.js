@@ -238,6 +238,17 @@ export async function insertPlanned({ name, amount }) {
   return res;
 }
 
+export async function updatePlanned(id, { name, amount }) {
+  if (!state.user) return { error: new Error("Utente non loggato") };
+  const sanitizedName = sanitizeText(name);
+  const res = await db.planned.update(state.user.id, id, { name: sanitizedName, amount });
+  if (checkError(res, "aggiornamento spesa variabile")) {
+    state.plannedExpenses = state.plannedExpenses.map(item => item.id === id ? res.data : item);
+    return res;
+  }
+  return res;
+}
+
 export async function deletePlanned(id) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const res = await db.planned.delete(state.user.id, id);

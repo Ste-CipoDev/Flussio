@@ -306,6 +306,9 @@ export function renderDashboard() {
         </div>
         <div class="item-right">
           <span class="item-amount">${formatCurrency(item.amount)}</span>
+          <button class="action-icon edit-btn" data-id="${escapeHtml(item.id)}" title="Modifica">
+            ${icons.edit('w-4 h-4')}
+          </button>
           <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina">
             ${icons.trash('w-4 h-4')}
           </button>
@@ -313,6 +316,17 @@ export function renderDashboard() {
       </div>
     `).join('');
     
+    // Attach edit listeners
+    listContainer.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const item = store.state.plannedExpenses.find(i => i.id === id);
+        if (item) {
+          modals.showEditPlannedModal(item, renderDashboard);
+        }
+      });
+    });
+
     // Attach delete listeners
     listContainer.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {

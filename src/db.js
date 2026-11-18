@@ -151,6 +151,12 @@ export async function syncOfflineData(expectedUserId = null) {
           .eq('user_id', payload.user_id);
       } else if (type === 'insert_planned') {
         result = await supabase.from('planned_expenses').insert(payload);
+      } else if (type === 'update_planned') {
+        result = await supabase
+          .from('planned_expenses')
+          .update({ name: payload.name, amount: payload.amount })
+          .eq('id', payload.id)
+          .eq('user_id', payload.user_id);
       } else if (type === 'delete_planned') {
         result = await supabase.from('planned_expenses').delete().eq('id', payload.id).eq('user_id', payload.user_id);
       }
@@ -754,6 +760,40 @@ export const db = {
         const localList = getLocal(cacheKey, []);
         localList.push(data);
         setLocal(cacheKey, localList);
+      }
+      return { data, error };
+    },
+    update: async (userId, id, { name, amount }) => {
+      const cacheKey = `flussio_planned_${userId}`;
+      const parsedAmount = parseFloat(amount);
+
+      if (!isConfigured || !isOnline()) {
+        const localList = getLocal(cacheKey, []);
+        const existing = localList.find(item => item.id === id) || {};
+        const updatedItem = {
+          ...existing,
+          id,
+          user_id: userId,
+          name,
+          amount: parsedAmount
+        };
+        const newList = localList.map(item => item.id === id ? updatedItem : item);
+        setLocal(cacheKey, newList);
+        enqueueSync('update_planned', updatedItem);
+        return { data: updatedItem, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('planned_expenses')
+        .update({ name, amount: parsedAmount })
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+      if (!error && data) {
+        const localList = getLocal(cacheKey, []);
+        const freshList = localList.map(item => item.id === id ? data : item);
+        setLocal(cacheKey, freshList);
       }
       return { data, error };
     },

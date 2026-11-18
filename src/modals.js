@@ -179,15 +179,16 @@ export function showEditSalaryModal(onSuccess) {
   });
 }
 
-// Modal: Add Planned Expense
-export function showAddPlannedModal(onSuccess) {
+// Shared Modal: Add or Edit Planned Expense
+function showPlannedModal({ item = null, onSuccess }) {
+  const isEdit = item !== null;
   const formHTML = `
-    <form id="add-planned-form">
+    <form id="planned-expense-form">
       <div class="form-group">
         <label class="form-label" for="planned-name">Nome Spesa (es. Spesa, Benzina)</label>
         <div class="input-container">
           ${icons.fileText('input-icon')}
-          <input class="input-field" type="text" id="planned-name" required placeholder="Benzina" maxlength="20" autofocus />
+          <input class="input-field" type="text" id="planned-name" required placeholder="Benzina" maxlength="20" value="${isEdit ? escapeHtml(item.name) : ''}" autofocus />
         </div>
       </div>
       
@@ -195,20 +196,20 @@ export function showAddPlannedModal(onSuccess) {
         <label class="form-label" for="planned-amount">Prezzo stimato (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="text" inputmode="decimal" id="planned-amount" required placeholder="50.00" />
+          <input class="input-field" type="text" inputmode="decimal" id="planned-amount" required placeholder="50.00" value="${isEdit ? escapeHtml(item.amount) : ''}" />
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Annulla</button>
-        <button type="submit" class="btn btn-primary">Aggiungi</button>
+        <button type="submit" class="btn btn-primary">${isEdit ? 'Salva' : 'Aggiungi'}</button>
       </div>
     </form>
   `;
 
-  renderModalHTML('Nuova Spesa Variabile', formHTML);
+  renderModalHTML(isEdit ? 'Modifica Spesa Variabile' : 'Nuova Spesa Variabile', formHTML);
   document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
 
-  bindModalSubmit('add-planned-form', async () => {
+  bindModalSubmit('planned-expense-form', async () => {
     const name = document.getElementById('planned-name').value.trim();
     const amount = parseAmount(document.getElementById('planned-amount').value);
 
@@ -221,12 +222,24 @@ export function showAddPlannedModal(onSuccess) {
       return;
     }
 
-    const res = await store.insertPlanned({ name, amount });
+    const res = isEdit
+      ? await store.updatePlanned(item.id, { name, amount })
+      : await store.insertPlanned({ name, amount });
     if (!res.error) {
       closeModal();
       if (onSuccess) onSuccess();
     }
   });
+}
+
+// Modal: Add Planned Expense
+export function showAddPlannedModal(onSuccess) {
+  showPlannedModal({ item: null, onSuccess });
+}
+
+// Modal: Edit Planned Expense
+export function showEditPlannedModal(item, onSuccess) {
+  showPlannedModal({ item, onSuccess });
 }
 
 // Modal: Add Monthly Commitment
