@@ -640,6 +640,15 @@ export function renderSettings() {
           ${isConfigured ? 'Attiva' : 'Non Attiva'}
         </span>
       </div>
+
+      <!-- Privacy Policy -->
+      <a class="settings-item" href="https://www.cipo.dev/privacy" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">
+        <div class="settings-item-left">
+          ${icons.fileText('w-5 h-5')}
+          <span class="settings-item-title">Informativa sulla Privacy</span>
+        </div>
+        <span style="font-size: 0.8rem; color: var(--accent-gold); font-weight: 500;">Apri ↗</span>
+      </a>
     </div>
 
     <!-- Backup section for local backup/import (perfect for local mode) -->

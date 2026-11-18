@@ -79,6 +79,12 @@ function initAppShell() {
               ? 'Non hai un account? <span id="toggle-auth-mode">Registrati</span>' 
               : 'Hai già un account? <span id="toggle-auth-mode">Accedi</span>'}
           </div>
+
+          <div style="text-align:center;margin-top:10px;font-size:0.75rem;">
+            <a href="https://www.cipo.dev/privacy" target="_blank" rel="noopener noreferrer" style="color:var(--text-muted);text-decoration:underline;">
+              Informativa sulla Privacy
+            </a>
+          </div>
           
           <div id="auth-message" role="alert" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:0.82rem;line-height:1.4;"></div>
 
