@@ -122,6 +122,7 @@ export async function syncOfflineData(expectedUserId = null) {
         result = await supabase.from('profiles').upsert({
           id: payload.id,
           salary_day: payload.salary_day,
+          salary_amount: payload.salary_amount ?? 0.00,
           current_balance: payload.current_balance,
           updated_at: payload.updated_at || new Date().toISOString()
         });
@@ -291,7 +292,7 @@ export const db = {
   profile: {
     get: async (userId) => {
       const cacheKey = `flussio_profile_${userId}`;
-      const defaultProfile = { id: userId, salary_day: 27, current_balance: 0.00 };
+      const defaultProfile = { id: userId, salary_day: 27, salary_amount: 0.00, current_balance: 0.00 };
       if (!isConfigured || !isOnline()) {
         return getLocal(cacheKey, defaultProfile);
       }
@@ -324,7 +325,7 @@ export const db = {
     },
     update: async (userId, updates) => {
       const cacheKey = `flussio_profile_${userId}`;
-      const localProfile = getLocal(cacheKey, { id: userId, salary_day: 27, current_balance: 0.00 });
+      const localProfile = getLocal(cacheKey, { id: userId, salary_day: 27, salary_amount: 0.00, current_balance: 0.00 });
       const updatedAt = new Date().toISOString();
       const updatedProfile = { ...localProfile, ...updates, updated_at: updatedAt };
 

@@ -7,7 +7,8 @@ import {
   getMonthName, 
   getNextSalaryDate, 
   isExpenseRemaining,
-  escapeHtml
+  escapeHtml,
+  parseAmount
 } from './utils.js';
 import { db, isConfigured } from './db.js';
 
@@ -38,53 +39,90 @@ export function switchView(viewName) {
 }
 
 // Render Chart Visualization helper
-function renderChartVisualization(metrics) {
+function renderChartVisualization(metrics, onRefreshDashboard) {
   const container = document.getElementById('chart-display-container');
   if (!container) return;
-  
-  const R = metrics.residuo;
-  const F = metrics.speseRimanenti;
-  const V = metrics.altreSpese;
-  const L = metrics.rimanenzaMensile;
-  
-  if (R <= 0) {
-    container.innerHTML = `
-      <div class="chart-empty-state">
-        <span style="color: var(--accent-red); font-weight: 500; font-size: 0.85rem;">Saldo iniziale pari a zero o negativo. Inserisci un saldo per sbloccare i grafici.</span>
-      </div>
-    `;
-    return;
-  }
-  
-  if (store.state.chartType === 'bar') {
-    // Segmented progress bar
-    const pctF = Math.max(0, Math.min(100, (F / R) * 100));
-    const pctV = Math.max(0, Math.min(100 - pctF, (V / R) * 100));
-    const pctL = Math.max(0, 100 - pctF - pctV);
-    
+
+  if (store.state.chartType === 'fixed') {
+    const S = metrics.stipendio;
+    const FT = metrics.totaleSpeseFisse;
+    const liberoFisse = metrics.stipendioResiduoDopoFisse;
+
+    if (S <= 0) {
+      container.innerHTML = `
+        <div class="chart-empty-state">
+          <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem; padding: 0 0.75rem;">
+            Imposta il tuo stipendio mensile per rapportarlo alle spese fisse totali.
+          </p>
+          <button id="quick-set-salary-btn" class="add-btn" style="margin: 0 auto;">
+            ${icons.edit('w-4 h-4')} Imposta Stipendio
+          </button>
+        </div>
+      `;
+      document.getElementById('quick-set-salary-btn')?.addEventListener('click', () => {
+        modals.showEditSalaryModal(onRefreshDashboard);
+      });
+      return;
+    }
+
+    const isOverBudget = FT > S;
+    const pctF = Math.max(0, Math.min(100, (FT / S) * 100));
+    const pctFree = Math.max(0, 100 - pctF);
+
     container.innerHTML = `
       <div class="bar-chart-wrapper">
+        <div class="salary-summary-row">
+          <span class="salary-summary-label">Stipendio: <strong>${formatCurrency(S)}</strong></span>
+          <button id="quick-edit-salary-btn" class="action-icon" title="Modifica stipendio mensile">
+            ${icons.edit('w-4 h-4')}
+          </button>
+        </div>
         <div class="bar-chart-track">
-          <div class="bar-segment fixed" style="width: ${pctF}%;" title="Spese Fisse: ${pctF.toFixed(0)}%"></div>
-          <div class="bar-segment variable" style="width: ${pctV}%;" title="Spese Variabili: ${pctV.toFixed(0)}%"></div>
-          <div class="bar-segment free" style="width: ${pctL}%;" title="Rimanenza Libera: ${pctL.toFixed(0)}%"></div>
+          <div class="bar-segment ${isOverBudget ? 'deficit' : 'fixed'}" style="width: ${pctF}%;" title="Spese Fisse Totali: ${pctF.toFixed(0)}%"></div>
+          <div class="bar-segment free" style="width: ${pctFree}%;" title="Margine Libero: ${pctFree.toFixed(0)}%"></div>
         </div>
         <div class="bar-chart-legend">
-          <div class="legend-item"><span class="dot fixed"></span><span>Fisse (${pctF.toFixed(0)}%)</span></div>
-          <div class="legend-item"><span class="dot variable"></span><span>Variabili (${pctV.toFixed(0)}%)</span></div>
-          <div class="legend-item"><span class="dot free"></span><span>Libera (${pctL.toFixed(0)}%)</span></div>
+          <div class="legend-item">
+            <span class="dot ${isOverBudget ? 'deficit' : 'fixed'}"></span>
+            <span>Fisse: <strong>${formatCurrency(FT)}</strong> (${((FT / S) * 100).toFixed(0)}%)</span>
+          </div>
+          <div class="legend-item">
+            <span class="dot ${isOverBudget ? 'deficit' : 'free'}"></span>
+            <span style="color: ${isOverBudget ? 'var(--accent-red)' : 'var(--accent-green)'};">
+              ${isOverBudget ? 'Eccedenza' : 'Libero'}: <strong>${formatCurrency(liberoFisse)}</strong> (${pctFree.toFixed(0)}%)
+            </span>
+          </div>
         </div>
       </div>
     `;
+    document.getElementById('quick-edit-salary-btn')?.addEventListener('click', () => {
+      modals.showEditSalaryModal(onRefreshDashboard);
+    });
   } else {
-    // Donut Chart SVG
+    // Tab 2: Residuo Mese (tolte spese mensili mancanti) vs Spese Programmate
+    const RM = metrics.residuoMese;
+    const V = metrics.altreSpese;
+    const L = metrics.rimanenzaMensile;
+
+    if (RM <= 0) {
+      container.innerHTML = `
+        <div class="chart-empty-state">
+          <span style="color: var(--accent-red); font-weight: 500; font-size: 0.85rem; display: block; padding: 0 0.75rem;">
+            Residuo mese esaurito o negativo (${formatCurrency(RM)}).${V > 0 ? ` Hai ${formatCurrency(V)} di spese programmate.` : ''}
+          </span>
+        </div>
+      `;
+      return;
+    }
+
     const isDeficit = L < 0;
-    const freePercentage = isDeficit ? 0 : Math.min(100, (L / R) * 100);
-    
+    const freePercentage = isDeficit ? 0 : Math.min(100, (L / RM) * 100);
+    const plannedPercentage = Math.max(0, (V / RM) * 100);
+
     const radius = 46;
     const circumference = 2 * Math.PI * radius; // ~289.02
     const strokeDashoffset = isDeficit ? 0 : circumference - (freePercentage / 100) * circumference;
-    
+
     container.innerHTML = `
       <div class="donut-chart-wrapper">
         <div class="donut-chart-svg-container">
@@ -108,14 +146,14 @@ function renderChartVisualization(metrics) {
           </svg>
         </div>
         <div class="donut-chart-legend">
-          <div class="legend-title">Rimanenza Libera</div>
+          <div class="legend-title">Disponibile dopo Programmate</div>
           <div class="legend-value" style="color: ${!isDeficit ? 'var(--accent-green)' : 'var(--accent-red)'}">
             ${formatCurrency(L)}
           </div>
           <div class="legend-desc">
             ${isDeficit
-              ? `Le spese superano il tuo saldo iniziale (${formatCurrency(R)}).`
-              : `Rappresenta il <strong>${freePercentage.toFixed(0)}%</strong> del tuo saldo iniziale (${formatCurrency(R)}).`}
+              ? `Le programmate (${formatCurrency(V)}) superano il residuo mese (${formatCurrency(RM)}).`
+              : `Su ${formatCurrency(RM)} di residuo mese, <strong>${formatCurrency(V)}</strong> (${plannedPercentage.toFixed(0)}%) sono programmate.`}
           </div>
         </div>
       </div>
@@ -201,8 +239,8 @@ export function renderDashboard() {
       <div class="chart-header">
         <h4>Suddivisione Budget</h4>
         <div class="chart-toggle-control">
-          <button id="toggle-chart-bar" class="toggle-btn ${store.state.chartType === 'bar' ? 'active' : ''}">Barra</button>
-          <button id="toggle-chart-donut" class="toggle-btn ${store.state.chartType === 'donut' ? 'active' : ''}">Ciambella</button>
+          <button id="toggle-chart-fixed" class="toggle-btn ${store.state.chartType === 'fixed' ? 'active' : ''}">Fisse</button>
+          <button id="toggle-chart-planned" class="toggle-btn ${store.state.chartType === 'planned' ? 'active' : ''}">Programmate</button>
         </div>
       </div>
       <div class="chart-body" id="chart-display-container">
@@ -224,28 +262,28 @@ export function renderDashboard() {
   `;
 
   // Draw chart visualizer
-  renderChartVisualization(metrics);
+  renderChartVisualization(metrics, renderDashboard);
 
   // Attach toggle listeners
-  const barToggle = document.getElementById('toggle-chart-bar');
-  const donutToggle = document.getElementById('toggle-chart-donut');
+  const fixedToggle = document.getElementById('toggle-chart-fixed');
+  const plannedToggle = document.getElementById('toggle-chart-planned');
   
-  if (barToggle && donutToggle) {
-    barToggle.addEventListener('click', () => {
-      if (store.state.chartType !== 'bar') {
-        store.setChartType('bar');
-        barToggle.classList.add('active');
-        donutToggle.classList.remove('active');
-        renderChartVisualization(metrics);
+  if (fixedToggle && plannedToggle) {
+    fixedToggle.addEventListener('click', () => {
+      if (store.state.chartType !== 'fixed') {
+        store.setChartType('fixed');
+        fixedToggle.classList.add('active');
+        plannedToggle.classList.remove('active');
+        renderChartVisualization(metrics, renderDashboard);
       }
     });
     
-    donutToggle.addEventListener('click', () => {
-      if (store.state.chartType !== 'donut') {
-        store.setChartType('donut');
-        donutToggle.classList.add('active');
-        barToggle.classList.remove('active');
-        renderChartVisualization(metrics);
+    plannedToggle.addEventListener('click', () => {
+      if (store.state.chartType !== 'planned') {
+        store.setChartType('planned');
+        plannedToggle.classList.add('active');
+        fixedToggle.classList.remove('active');
+        renderChartVisualization(metrics, renderDashboard);
       }
     });
   }
@@ -556,6 +594,17 @@ export function renderSettings() {
         </div>
       </div>
 
+      <!-- Salary Amount Settings -->
+      <div class="settings-item">
+        <div class="settings-item-left">
+          ${icons.euro('w-5 h-5')}
+          <span class="settings-item-title">Importo Stipendio (€)</span>
+        </div>
+        <div class="settings-action">
+          <input type="text" inputmode="decimal" id="settings-salary-amount" style="width: 96px;" value="${escapeHtml(store.state.profile.salary_amount ?? 0)}" />
+        </div>
+      </div>
+
       <!-- Next Salary Info -->
       <div class="settings-item">
         <div class="settings-item-left">
@@ -625,6 +674,25 @@ export function renderSettings() {
         renderSettings();
       } else {
         e.target.value = store.state.profile.salary_day;
+      }
+    });
+  }
+
+  // Attach change listener to salary amount
+  const salaryAmountInput = document.getElementById('settings-salary-amount');
+  if (salaryAmountInput) {
+    salaryAmountInput.addEventListener('change', async (e) => {
+      const parsed = parseAmount(e.target.value);
+      if (parsed === null || parsed < 0) {
+        alert('Inserisci uno stipendio valido (>= 0, es. 1800,00).');
+        e.target.value = store.state.profile.salary_amount ?? 0;
+        return;
+      }
+      const res = await store.updateProfile({ salary_amount: parsed });
+      if (!res.error) {
+        renderSettings();
+      } else {
+        e.target.value = store.state.profile.salary_amount ?? 0;
       }
     });
   }

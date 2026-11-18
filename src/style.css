@@ -970,6 +970,22 @@ h1, h2, h3, h4, .font-display {
   background: linear-gradient(90deg, var(--accent-green), #34d399);
 }
 
+.bar-segment.deficit {
+  background: linear-gradient(90deg, var(--accent-red), #fb7185);
+}
+
+.salary-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.salary-summary-label strong {
+  color: var(--accent-gold);
+}
+
 .bar-chart-legend {
   display: flex;
   justify-content: space-between;
@@ -995,6 +1011,7 @@ h1, h2, h3, h4, .font-display {
 .legend-item .dot.fixed { background-color: var(--accent-orange); }
 .legend-item .dot.variable { background-color: var(--accent-gold); }
 .legend-item .dot.free { background-color: var(--accent-green); }
+.legend-item .dot.deficit { background-color: var(--accent-red); }
 
 /* Donut Chart SVG Styles */
 .donut-chart-wrapper {

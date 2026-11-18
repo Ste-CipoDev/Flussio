@@ -1,10 +1,16 @@
 import { db } from './db.js';
 import { isExpenseRemaining, parseAmount } from './utils.js';
 
+function resolveInitialChartTab() {
+  const saved = localStorage.getItem('flussio_chart_type');
+  if (saved === 'planned' || saved === 'donut') return 'planned';
+  return 'fixed';
+}
+
 // State management
 export const state = {
   user: null,
-  profile: { salary_day: 27, current_balance: 0 },
+  profile: { salary_day: 27, salary_amount: 0, current_balance: 0 },
   monthlyCommitments: [],
   annualCommitments: [],
   annualStatus: [],
@@ -12,11 +18,11 @@ export const state = {
   activeView: 'dashboard', // dashboard, monthly, annual, settings
   isLoading: true,
   isAuthMode: 'login', // login, register
-  chartType: localStorage.getItem('flussio_chart_type') || 'bar' // bar, donut
+  chartType: resolveInitialChartTab() // fixed, planned
 };
 
 export function resetState() {
-  state.profile = { salary_day: 27, current_balance: 0 };
+  state.profile = { salary_day: 27, salary_amount: 0, current_balance: 0 };
   state.monthlyCommitments = [];
   state.annualCommitments = [];
   state.annualStatus = [];
@@ -56,13 +62,17 @@ function toCents(val) {
 // ==========================================
 export function calculateMetrics() {
   const residuoCents = toCents(state.profile.current_balance || 0);
+  const stipendioCents = toCents(state.profile.salary_amount || 0);
 
-  // 1. Spese Rimanenti
+  // 1. Spese Fisse Totali & Spese Rimanenti
+  const totaleSpeseFisseCents = state.monthlyCommitments
+    .reduce((sum, item) => sum + toCents(item.amount), 0);
+
   const speseRimanentiCents = state.monthlyCommitments
     .filter(item => isExpenseRemaining(item.day, state.profile.salary_day))
     .reduce((sum, item) => sum + toCents(item.amount), 0);
 
-  // 2. Residuo Mese
+  // 2. Residuo Mese (saldo tolte spese mensili mancanti)
   const residuoMeseCents = residuoCents - speseRimanentiCents;
 
   // 3. Altre Spese in Programma (Planned)
@@ -74,6 +84,9 @@ export function calculateMetrics() {
 
   return {
     residuo: residuoCents / 100,
+    stipendio: stipendioCents / 100,
+    totaleSpeseFisse: totaleSpeseFisseCents / 100,
+    stipendioResiduoDopoFisse: (stipendioCents - totaleSpeseFisseCents) / 100,
     speseRimanenti: speseRimanentiCents / 100,
     residuoMese: residuoMeseCents / 100,
     altreSpese: altreSpeseCents / 100,
@@ -103,7 +116,7 @@ export async function fetchAllData() {
       db.planned.list(userId, currentMonth, currentYear)
     ]);
     
-    state.profile = profile || { salary_day: 27, current_balance: 0 };
+    state.profile = profile || { salary_day: 27, salary_amount: 0, current_balance: 0 };
     state.monthlyCommitments = monthlyRes.data || [];
     state.annualCommitments = annualRes.data || [];
     state.annualStatus = annualStatusRes.data || [];
@@ -266,13 +279,24 @@ export function validateImportData(data) {
     }
     const salaryDay = parseInt(data.profile.salary_day, 10);
     const balance = parseAmount(data.profile.current_balance);
+    const salaryAmountRaw = data.profile.salary_amount;
+    const salaryAmount = salaryAmountRaw !== undefined && salaryAmountRaw !== null
+      ? parseAmount(salaryAmountRaw)
+      : 0;
     if (!Number.isFinite(salaryDay) || salaryDay < 1 || salaryDay > 31) {
       return { valid: false, error: 'Campo "profile.salary_day" non valido (atteso 1-31).' };
     }
     if (balance === null) {
       return { valid: false, error: 'Campo "profile.current_balance" non valido.' };
     }
-    normalized.profile = { salary_day: salaryDay, current_balance: balance };
+    if (salaryAmount === null || salaryAmount < 0) {
+      return { valid: false, error: 'Campo "profile.salary_amount" non valido (atteso >= 0).' };
+    }
+    normalized.profile = {
+      salary_day: salaryDay,
+      salary_amount: salaryAmount,
+      current_balance: balance
+    };
   }
 
   if (data.monthlyCommitments !== undefined) {
@@ -343,6 +367,7 @@ async function rollbackImport(userId, snapshot, currentMonth, currentYear) {
     if (snapshot.profile) {
       await db.profile.update(userId, {
         salary_day: snapshot.profile.salary_day,
+        salary_amount: snapshot.profile.salary_amount ?? 0,
         current_balance: snapshot.profile.current_balance
       });
     }

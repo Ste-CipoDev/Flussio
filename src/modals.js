@@ -142,6 +142,43 @@ export function showEditResiduoModal(onSuccess) {
   });
 }
 
+// Modal: Update Stipendio Mensile (salary_amount)
+export function showEditSalaryModal(onSuccess) {
+  const currentSalary = store.state.profile.salary_amount ?? 0;
+  const formHTML = `
+    <form id="edit-salary-form">
+      <div class="form-group">
+        <label class="form-label" for="salary-amount-val">Stipendio Mensile Netto (€)</label>
+        <div class="input-container">
+          ${icons.euro('input-icon')}
+          <input class="input-field" type="text" inputmode="decimal" id="salary-amount-val" value="${escapeHtml(currentSalary)}" required autofocus />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Annulla</button>
+        <button type="submit" class="btn btn-primary">Salva</button>
+      </div>
+    </form>
+  `;
+
+  renderModalHTML('Imposta Stipendio Mensile', formHTML);
+  document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+
+  bindModalSubmit('edit-salary-form', async () => {
+    const val = parseAmount(document.getElementById('salary-amount-val').value);
+    if (val === null || val < 0) {
+      showModalError('Inserisci un importo valido (>= 0, es. 1800,00).');
+      return;
+    }
+
+    const res = await store.updateProfile({ salary_amount: val });
+    if (!res.error) {
+      closeModal();
+      if (onSuccess) onSuccess();
+    }
+  });
+}
+
 // Modal: Add Planned Expense
 export function showAddPlannedModal(onSuccess) {
   const formHTML = `

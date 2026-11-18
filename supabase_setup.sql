@@ -5,6 +5,7 @@
 create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   salary_day integer default 27 check (salary_day >= 1 and salary_day <= 31),
+  salary_amount numeric(10,2) default 0.00 check (salary_amount >= 0),
   current_balance numeric(10,2) default 0.00,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
