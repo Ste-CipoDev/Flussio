@@ -1,8 +1,9 @@
 import './style.css';
-import { db, isConfigured } from './db.js';
+import { db, isConfigured, syncOfflineData } from './db.js';
 import { icons } from './icons.js';
-import { state, fetchAllData } from './store.js';
+import { state, fetchAllData, resetState } from './store.js';
 import { switchView } from './views.js';
+import { escapeHtml } from './utils.js';
 
 function renderAppLoader(show) {
   const loader = document.getElementById('app-loader');
@@ -150,7 +151,7 @@ function initAppShell() {
     async function isPasswordPwned(password) {
       try {
         const encoder = new TextEncoder();
-        const data = encoder.encode(password.toUpperCase());
+        const data = encoder.encode(password);
         const hashBuffer = await crypto.subtle.digest('SHA-1', data);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -198,7 +199,7 @@ function initAppShell() {
       if (status === 429 || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many')) {
         showRateLimitMessage(30);
       } else {
-        showAuthMessage('⚠ ' + msg);
+        showAuthMessage('⚠ ' + escapeHtml(msg));
       }
     }
 
@@ -210,6 +211,10 @@ function initAppShell() {
 
     // Auth Event Listeners
     document.getElementById('toggle-auth-mode').addEventListener('click', () => {
+      if (rateLimitTimer) {
+        clearInterval(rateLimitTimer);
+        rateLimitTimer = null;
+      }
       state.isAuthMode = state.isAuthMode === 'login' ? 'register' : 'login';
       initAppShell();
     });
@@ -217,7 +222,7 @@ function initAppShell() {
     document.getElementById('auth-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       hideAuthMessage();
-      const email = document.getElementById('auth-email').value;
+      const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
       
       const submitBtn = document.getElementById('auth-submit-btn');
@@ -239,8 +244,6 @@ function initAppShell() {
             if (!checks.number)  missing.push('un numero');
             if (!checks.special) missing.push('un carattere speciale');
             showAuthMessage(`⚠ Password non valida. Mancano: ${missing.join(', ')}.`);
-            submitBtn.disabled = false;
-            submitBtn.innerText = 'Registrati';
             return;
           }
 
@@ -249,8 +252,6 @@ function initAppShell() {
           const pwned = await isPasswordPwned(password);
           if (pwned) {
             showAuthMessage('🚫 Questa password è stata trovata in un data breach noto (HaveIBeenPwned). Scegli una password diversa.');
-            submitBtn.disabled = false;
-            submitBtn.innerText = 'Registrati';
             return;
           }
           hideAuthMessage();
@@ -261,7 +262,7 @@ function initAppShell() {
           } else if (!res.data?.session) {
             // P3: email confirmation required – session is null
             showAuthMessage(
-              '📧 <strong>Controlla la tua email!</strong><br>Ti abbiamo inviato un link di conferma a <em>' + email + '</em>. Clicca il link per attivare il tuo account.',
+              '📧 <strong>Controlla la tua email!</strong><br>Ti abbiamo inviato un link di conferma a <em>' + escapeHtml(email) + '</em>. Clicca il link per attivare il tuo account.',
               'info'
             );
           }
@@ -270,8 +271,11 @@ function initAppShell() {
       } catch (err) {
         handleAuthError(err);
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerText = state.isAuthMode === 'login' ? 'Accedi' : 'Registrati';
+        const currentBtn = document.getElementById('auth-submit-btn');
+        if (currentBtn) {
+          currentBtn.disabled = false;
+          currentBtn.innerText = state.isAuthMode === 'login' ? 'Accedi' : 'Registrati';
+        }
       }
     });
     
@@ -406,6 +410,7 @@ db.auth.onAuthStateChange(async (event, user) => {
     lastUserId = user.id;
     if (userChanged) {
       renderAppLoader(true);
+      await syncOfflineData(user.id);
       await fetchAllData();
       renderAppLoader(false);
       initAppShell();
@@ -417,9 +422,17 @@ db.auth.onAuthStateChange(async (event, user) => {
     }
   } else {
     lastUserId = null;
-    state.isLoading = false;
+    resetState();
     renderAppLoader(false);
     initAppShell();
+  }
+});
+
+// Refresh UI after background offline sync completes
+window.addEventListener('flussio:synced', async () => {
+  if (state.user) {
+    await fetchAllData();
+    switchView(state.activeView);
   }
 });
 

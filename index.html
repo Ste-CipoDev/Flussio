@@ -20,13 +20,12 @@
     <title>Flussio</title>
   </head>
   <body>
-    <div id="app">
-      <!-- Loading screen -->
-      <div id="app-loader" class="loader-container">
-        <div class="loader-spinner"></div>
-        <div class="loader-text">Flussio</div>
-      </div>
+    <!-- Global Loading screen (outside #app so initAppShell never removes it) -->
+    <div id="app-loader" class="loader-container">
+      <div class="loader-spinner"></div>
+      <div class="loader-text">Flussio</div>
     </div>
+    <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

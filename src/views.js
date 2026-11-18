@@ -6,7 +6,8 @@ import {
   formatCurrency, 
   getMonthName, 
   getNextSalaryDate, 
-  isExpenseRemaining 
+  isExpenseRemaining,
+  escapeHtml
 } from './utils.js';
 import { db, isConfigured } from './db.js';
 
@@ -57,8 +58,8 @@ function renderChartVisualization(metrics) {
   
   if (store.state.chartType === 'bar') {
     // Segmented progress bar
-    const pctF = Math.min(100, (F / R) * 100);
-    const pctV = Math.min(100 - pctF, (V / R) * 100);
+    const pctF = Math.max(0, Math.min(100, (F / R) * 100));
+    const pctV = Math.max(0, Math.min(100 - pctF, (V / R) * 100));
     const pctL = Math.max(0, 100 - pctF - pctV);
     
     container.innerHTML = `
@@ -77,11 +78,12 @@ function renderChartVisualization(metrics) {
     `;
   } else {
     // Donut Chart SVG
-    const freePercentage = Math.max(0, Math.min(100, (L / R) * 100));
+    const isDeficit = L < 0;
+    const freePercentage = isDeficit ? 0 : Math.min(100, (L / R) * 100);
     
     const radius = 46;
     const circumference = 2 * Math.PI * radius; // ~289.02
-    const strokeDashoffset = circumference - (freePercentage / 100) * circumference;
+    const strokeDashoffset = isDeficit ? 0 : circumference - (freePercentage / 100) * circumference;
     
     container.innerHTML = `
       <div class="donut-chart-wrapper">
@@ -89,7 +91,7 @@ function renderChartVisualization(metrics) {
           <svg class="donut-chart-svg" width="130" height="130" viewBox="0 0 110 110">
             <circle class="donut-track" cx="55" cy="55" r="${radius}" stroke="var(--border-color)" stroke-width="9" fill="none" />
             <circle class="donut-indicator" cx="55" cy="55" r="${radius}" 
-              stroke="${L >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}" 
+              stroke="${!isDeficit ? 'var(--accent-green)' : 'var(--accent-red)'}" 
               stroke-width="9" 
               fill="none" 
               stroke-linecap="round"
@@ -101,17 +103,19 @@ function renderChartVisualization(metrics) {
               ${freePercentage.toFixed(0)}%
             </text>
             <text class="donut-text-lbl" x="55" y="70" text-anchor="middle" dominant-baseline="middle" fill="var(--text-muted)" font-size="8" font-weight="600" font-family="'Inter', sans-serif" letter-spacing="0.05em">
-              LIBERO
+              ${isDeficit ? 'DEFICIT' : 'LIBERO'}
             </text>
           </svg>
         </div>
         <div class="donut-chart-legend">
           <div class="legend-title">Rimanenza Libera</div>
-          <div class="legend-value" style="color: ${L >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">
+          <div class="legend-value" style="color: ${!isDeficit ? 'var(--accent-green)' : 'var(--accent-red)'}">
             ${formatCurrency(L)}
           </div>
           <div class="legend-desc">
-            Rappresenta il <strong>${freePercentage.toFixed(0)}%</strong> del tuo saldo iniziale (${formatCurrency(R)}).
+            ${isDeficit
+              ? `Le spese superano il tuo saldo iniziale (${formatCurrency(R)}).`
+              : `Rappresenta il <strong>${freePercentage.toFixed(0)}%</strong> del tuo saldo iniziale (${formatCurrency(R)}).`}
           </div>
         </div>
       </div>
@@ -259,12 +263,12 @@ export function renderDashboard() {
     listContainer.innerHTML = store.state.plannedExpenses.map(item => `
       <div class="item-card">
         <div class="item-info">
-          <span class="item-title">${item.name}</span>
+          <span class="item-title">${escapeHtml(item.name)}</span>
           <span class="item-subtitle">Spesa programmata</span>
         </div>
         <div class="item-right">
           <span class="item-amount">${formatCurrency(item.amount)}</span>
-          <button class="action-icon delete-btn" data-id="${item.id}" title="Elimina">
+          <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina">
             ${icons.trash('w-4 h-4')}
           </button>
         </div>
@@ -340,8 +344,8 @@ export function renderMonthly() {
       return `
         <div class="item-card ${isRemaining ? 'remaining-highlight' : ''}">
           <div class="item-info">
-            <span class="item-title">${item.name}</span>
-            <span class="item-subtitle">Giorno di addebito: <strong>${item.day}</strong>
+            <span class="item-title">${escapeHtml(item.name)}</span>
+            <span class="item-subtitle">Giorno di addebito: <strong>${escapeHtml(item.day)}</strong>
               ${isRemaining 
                 ? '<span class="item-badge unpaid">Da Pagare</span>' 
                 : '<span class="item-badge paid">Passata/Pagata</span>'}
@@ -349,10 +353,10 @@ export function renderMonthly() {
           </div>
           <div class="item-right">
             <span class="item-amount">${formatCurrency(item.amount)}</span>
-            <button class="action-icon edit-btn" data-id="${item.id}" title="Modifica">
+            <button class="action-icon edit-btn" data-id="${escapeHtml(item.id)}" title="Modifica">
               ${icons.edit('w-4 h-4')}
             </button>
-            <button class="action-icon delete-btn" data-id="${item.id}" title="Elimina">
+            <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina">
               ${icons.trash('w-4 h-4')}
             </button>
           </div>
@@ -432,7 +436,9 @@ export function renderAnnual() {
   } else {
     listContainer.innerHTML = store.state.annualCommitments.map(item => {
       const isDueThisMonth = item.month === currentMonth;
-      const isConfirmed = store.state.annualStatus.some(s => s.annual_commitment_id === item.id);
+      const isConfirmed = store.state.annualStatus.some(
+        s => s.annual_commitment_id === item.id && s.year === currentYear
+      );
       
       let cardStatusClass = '';
       let badgeHtml = '';
@@ -452,19 +458,19 @@ export function renderAnnual() {
       return `
         <div class="item-card ${cardStatusClass}">
           <div class="item-info">
-            <span class="item-title">${item.name}</span>
-            <span class="item-subtitle">Mese di pagamento: <strong>${getMonthName(item.month)}</strong> ${badgeHtml}</span>
+            <span class="item-title">${escapeHtml(item.name)}</span>
+            <span class="item-subtitle">Mese di pagamento: <strong>${escapeHtml(getMonthName(item.month))}</strong> ${badgeHtml}</span>
           </div>
           <div class="item-right">
             <span class="item-amount">${formatCurrency(item.amount)}</span>
             
             ${isDueThisMonth ? `
-              <button class="action-icon confirm-btn ${checkActionClass}" data-id="${item.id}" data-confirmed="${isConfirmed}" title="${isConfirmed ? 'Annulla Pagamento' : 'Conferma Pagamento'}">
+              <button class="action-icon confirm-btn ${checkActionClass}" data-id="${escapeHtml(item.id)}" data-confirmed="${isConfirmed}" title="${isConfirmed ? 'Annulla Pagamento' : 'Conferma Pagamento'}">
                 ${icons.checkCircle('w-5 h-5')}
               </button>
             ` : ''}
 
-            <button class="action-icon delete-btn" data-id="${item.id}" title="Elimina">
+            <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina">
               ${icons.trash('w-4 h-4')}
             </button>
           </div>
@@ -475,17 +481,24 @@ export function renderAnnual() {
     // Attach click listeners for payment confirmations
     listContainer.querySelectorAll('.confirm-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
-        const id = e.currentTarget.getAttribute('data-id');
-        const isConfirmed = e.currentTarget.getAttribute('data-confirmed') === 'true';
+        const targetBtn = e.currentTarget;
+        if (targetBtn.disabled) return;
+        targetBtn.disabled = true;
+
+        const id = targetBtn.getAttribute('data-id');
+        const isConfirmed = targetBtn.getAttribute('data-confirmed') === 'true';
         
-        let res;
-        if (isConfirmed) {
-          res = await store.unconfirmAnnual(id, currentYear);
-        } else {
-          res = await store.confirmAnnual(id, currentYear);
-        }
-        if (!res.error) {
-          renderAnnual();
+        try {
+          const res = isConfirmed
+            ? await store.unconfirmAnnual(id, currentYear)
+            : await store.confirmAnnual(id, currentYear);
+          if (!res.error) {
+            renderAnnual();
+          }
+        } finally {
+          if (document.body.contains(targetBtn)) {
+            targetBtn.disabled = false;
+          }
         }
       });
     });
@@ -529,7 +542,7 @@ export function renderSettings() {
           ${icons.user('w-5 h-5')}
           <span class="settings-item-title">Account</span>
         </div>
-        <span style="font-size: 0.85rem; color: var(--text-secondary);">${store.state.user.email}</span>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(store.state.user.email)}</span>
       </div>
 
       <!-- Salary Day Settings -->
@@ -577,7 +590,6 @@ export function renderSettings() {
           ${icons.download('w-5 h-5')}
           <span class="settings-item-title">Esporta Backup (JSON)</span>
         </div>
-        <span style="font-size: 0.85rem; color: var(--text-muted);">${icons.plus('w-4 h-4 transform rotate-45')}</span>
       </div>
       
       <div class="settings-item" style="position: relative; cursor: pointer;">
@@ -603,7 +615,7 @@ export function renderSettings() {
   const salaryInput = document.getElementById('settings-salary-day');
   if (salaryInput) {
     salaryInput.addEventListener('change', async (e) => {
-      let day = parseInt(e.target.value);
+      let day = parseInt(e.target.value, 10);
       if (isNaN(day) || day < 1) day = 1;
       if (day > 31) day = 31;
       e.target.value = day;
@@ -611,6 +623,8 @@ export function renderSettings() {
       const res = await store.updateProfile({ salary_day: day });
       if (!res.error) {
         renderSettings();
+      } else {
+        e.target.value = store.state.profile.salary_day;
       }
     });
   }
@@ -651,20 +665,30 @@ export function renderSettings() {
   const exportBtn = document.getElementById('export-backup-btn');
   if (exportBtn) {
     exportBtn.addEventListener('click', () => {
+      const annualStatusExport = store.state.annualStatus
+        .map(s => {
+          const item = store.state.annualCommitments.find(a => a.id === s.annual_commitment_id);
+          return item ? { name: item.name, month: item.month, year: s.year } : null;
+        })
+        .filter(Boolean);
+
       const backupData = {
         profile: store.state.profile,
         monthlyCommitments: store.state.monthlyCommitments,
         annualCommitments: store.state.annualCommitments,
+        annualStatus: annualStatusExport,
         plannedExpenses: store.state.plannedExpenses
       };
       
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
       const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `flussio_backup_${formatDate(new Date()).replace(/\//g, '-')}.json`);
+      downloadAnchor.href = url;
+      downloadAnchor.download = `flussio_backup_${formatDate(new Date()).replace(/\//g, '-')}.json`;
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+      URL.revokeObjectURL(url);
     });
   }
 
@@ -673,6 +697,7 @@ export function renderSettings() {
   if (importFile) {
     importFile.addEventListener('change', async (e) => {
       const file = e.target.files[0];
+      e.target.value = '';
       if (!file) return;
 
       const reader = new FileReader();

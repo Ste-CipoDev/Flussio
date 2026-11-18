@@ -1,9 +1,9 @@
-const CACHE_NAME = 'flussio-cache-v2'; // Bumped cache version
+const CACHE_NAME = 'flussio-cache-v3'; // Bumped cache version
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  './favicon.svg',
+  './favicon.png',
   './icon-192.png',
   './icon-512.png'
 ];
@@ -37,11 +37,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // Skip caching for Supabase requests, non-GET requests, or browser extensions
+  // Skip caching for non-http(s), Supabase, HIBP API, non-GET requests, or auth routes
   if (
-    event.request.method !== 'GET' || 
-    url.hostname.includes('supabase.co') || 
-    url.protocol === 'chrome-extension:' ||
+    event.request.method !== 'GET' ||
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('pwnedpasswords.com') ||
     url.pathname.includes('/auth/')
   ) {
     return;
