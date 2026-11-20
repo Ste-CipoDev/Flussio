@@ -14,9 +14,9 @@ create table if not exists public.profiles (
 create table if not exists public.monthly_commitments (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
-  name text not null,
+  name text not null check (char_length(trim(name)) > 0),
   day integer not null check (day >= 1 and day <= 31),
-  amount numeric(10,2) not null,
+  amount numeric(10,2) not null check (amount > 0),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -24,9 +24,9 @@ create table if not exists public.monthly_commitments (
 create table if not exists public.annual_commitments (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
-  name text not null,
+  name text not null check (char_length(trim(name)) > 0),
   month integer not null check (month >= 1 and month <= 12), -- 1=January, 12=December
-  amount numeric(10,2) not null,
+  amount numeric(10,2) not null check (amount > 0),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -44,12 +44,19 @@ create table if not exists public.annual_payments_status (
 create table if not exists public.planned_expenses (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
-  name text not null,
-  amount numeric(10,2) not null,
+  name text not null check (char_length(trim(name)) > 0),
+  amount numeric(10,2) not null check (amount > 0),
   month integer not null check (month >= 1 and month <= 12),
   year integer not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- 5b. Indexes for RLS and query performance
+create index if not exists idx_monthly_commitments_user_id on public.monthly_commitments (user_id);
+create index if not exists idx_annual_commitments_user_id on public.annual_commitments (user_id);
+create index if not exists idx_annual_payments_status_user_year on public.annual_payments_status (user_id, year);
+create index if not exists idx_annual_payments_status_commitment_id on public.annual_payments_status (annual_commitment_id);
+create index if not exists idx_planned_expenses_user_year_month on public.planned_expenses (user_id, year, month);
 
 -- 6. Enable Row Level Security (RLS) on all tables
 alter table public.profiles enable row level security;
@@ -62,59 +69,65 @@ alter table public.planned_expenses enable row level security;
 
 -- Policies for profiles
 create policy "Users can view their own profile" on public.profiles
-  for select using (auth.uid() = id);
+  for select to authenticated using ((select auth.uid()) = id);
 create policy "Users can update their own profile" on public.profiles
-  for update using (auth.uid() = id);
+  for update to authenticated using ((select auth.uid()) = id) with check ((select auth.uid()) = id);
 create policy "Users can insert their own profile" on public.profiles
-  for insert with check (auth.uid() = id);
+  for insert to authenticated with check ((select auth.uid()) = id);
 
 -- Policies for monthly commitments
 create policy "Users can select their own monthly commitments" on public.monthly_commitments
-  for select using (auth.uid() = user_id);
+  for select to authenticated using ((select auth.uid()) = user_id);
 create policy "Users can insert their own monthly commitments" on public.monthly_commitments
-  for insert with check (auth.uid() = user_id);
+  for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "Users can update their own monthly commitments" on public.monthly_commitments
-  for update using (auth.uid() = user_id);
+  for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "Users can delete their own monthly commitments" on public.monthly_commitments
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using ((select auth.uid()) = user_id);
 
 -- Policies for annual commitments
 create policy "Users can select their own annual commitments" on public.annual_commitments
-  for select using (auth.uid() = user_id);
+  for select to authenticated using ((select auth.uid()) = user_id);
 create policy "Users can insert their own annual commitments" on public.annual_commitments
-  for insert with check (auth.uid() = user_id);
+  for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "Users can update their own annual commitments" on public.annual_commitments
-  for update using (auth.uid() = user_id);
+  for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "Users can delete their own annual commitments" on public.annual_commitments
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using ((select auth.uid()) = user_id);
 
 -- Policies for annual payments status
 create policy "Users can select their own annual payments status" on public.annual_payments_status
-  for select using (auth.uid() = user_id);
+  for select to authenticated using ((select auth.uid()) = user_id);
 create policy "Users can insert their own annual payments status" on public.annual_payments_status
-  for insert with check (auth.uid() = user_id);
+  for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "Users can delete their own annual payments status" on public.annual_payments_status
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using ((select auth.uid()) = user_id);
 
 -- Policies for planned expenses
 create policy "Users can select their own planned expenses" on public.planned_expenses
-  for select using (auth.uid() = user_id);
+  for select to authenticated using ((select auth.uid()) = user_id);
 create policy "Users can insert their own planned expenses" on public.planned_expenses
-  for insert with check (auth.uid() = user_id);
+  for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "Users can update their own planned expenses" on public.planned_expenses
-  for update using (auth.uid() = user_id);
+  for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "Users can delete their own planned expenses" on public.planned_expenses
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using ((select auth.uid()) = user_id);
 
 -- 8. Automate Profile Creation on User Signup
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
   insert into public.profiles (id, salary_day, current_balance)
   values (new.id, 27, 0.00);
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
+
+revoke execute on function public.handle_new_user() from anon, authenticated, public;
 
 -- Drop trigger if exists, then create it
 drop trigger if exists on_auth_user_created on auth.users;
@@ -124,8 +137,18 @@ create trigger on_auth_user_created
 
 -- 9. Function to Delete User and All Data (Self-Deletion)
 create or replace function public.delete_user()
-returns void as $$
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
   delete from auth.users where id = auth.uid();
 end;
-$$ language plpgsql security definer;
+$$;
+
+revoke execute on function public.delete_user() from anon, public;
+grant execute on function public.delete_user() to authenticated;

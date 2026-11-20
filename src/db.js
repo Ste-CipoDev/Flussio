@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { generateUUID } from './utils.js';
 
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON;
@@ -87,7 +88,8 @@ function isTransientSyncError(error) {
   if (!error) return false;
   const status = error.status || 0;
   const msg = (error.message || '').toLowerCase();
-  return status >= 500 || msg.includes('fetch') || msg.includes('network') || msg.includes('timeout');
+  return status === 401 || status === 408 || status === 429 || status >= 500 ||
+    msg.includes('fetch') || msg.includes('network') || msg.includes('timeout') || msg.includes('jwt');
 }
 
 // Sync all offline changes to Supabase when connection is restored or on startup
@@ -106,6 +108,7 @@ export async function syncOfflineData(expectedUserId = null) {
   console.log(`Flussio: Sincronizzazione di ${queue.length} modifiche offline in corso...`);
   const remainingQueue = [];
   let syncedCount = 0;
+  let authRefreshed = false;
 
   for (const action of queue) {
     const { type, payload } = action;
@@ -116,10 +119,9 @@ export async function syncOfflineData(expectedUserId = null) {
       continue;
     }
 
-    try {
-      let result = null;
+    const executeAction = async () => {
       if (type === 'update_profile') {
-        result = await supabase.from('profiles').upsert({
+        return await supabase.from('profiles').upsert({
           id: payload.id,
           salary_day: payload.salary_day,
           salary_amount: payload.salary_amount ?? 0.00,
@@ -127,38 +129,57 @@ export async function syncOfflineData(expectedUserId = null) {
           updated_at: payload.updated_at || new Date().toISOString()
         });
       } else if (type === 'insert_monthly') {
-        result = await supabase.from('monthly_commitments').insert(payload);
+        return await supabase.from('monthly_commitments').insert(payload);
       } else if (type === 'update_monthly') {
-        result = await supabase
+        return await supabase
           .from('monthly_commitments')
           .update({ name: payload.name, day: payload.day, amount: payload.amount })
           .eq('id', payload.id)
           .eq('user_id', payload.user_id);
       } else if (type === 'delete_monthly') {
-        result = await supabase.from('monthly_commitments').delete().eq('id', payload.id).eq('user_id', payload.user_id);
+        return await supabase.from('monthly_commitments').delete().eq('id', payload.id).eq('user_id', payload.user_id);
       } else if (type === 'insert_annual') {
-        result = await supabase.from('annual_commitments').insert(payload);
+        return await supabase.from('annual_commitments').insert(payload);
+      } else if (type === 'update_annual') {
+        return await supabase
+          .from('annual_commitments')
+          .update({ name: payload.name, month: payload.month, amount: payload.amount })
+          .eq('id', payload.id)
+          .eq('user_id', payload.user_id);
       } else if (type === 'delete_annual') {
-        result = await supabase.from('annual_commitments').delete().eq('id', payload.id).eq('user_id', payload.user_id);
+        return await supabase.from('annual_commitments').delete().eq('id', payload.id).eq('user_id', payload.user_id);
       } else if (type === 'confirm_annual') {
-        result = await supabase.from('annual_payments_status').insert(payload);
+        return await supabase.from('annual_payments_status').insert(payload);
       } else if (type === 'unconfirm_annual') {
-        result = await supabase
+        return await supabase
           .from('annual_payments_status')
           .delete()
           .eq('annual_commitment_id', payload.annual_commitment_id)
           .eq('year', payload.year)
           .eq('user_id', payload.user_id);
       } else if (type === 'insert_planned') {
-        result = await supabase.from('planned_expenses').insert(payload);
+        return await supabase.from('planned_expenses').insert(payload);
       } else if (type === 'update_planned') {
-        result = await supabase
+        return await supabase
           .from('planned_expenses')
           .update({ name: payload.name, amount: payload.amount })
           .eq('id', payload.id)
           .eq('user_id', payload.user_id);
       } else if (type === 'delete_planned') {
-        result = await supabase.from('planned_expenses').delete().eq('id', payload.id).eq('user_id', payload.user_id);
+        return await supabase.from('planned_expenses').delete().eq('id', payload.id).eq('user_id', payload.user_id);
+      }
+      return null;
+    };
+
+    try {
+      let result = await executeAction();
+
+      if (result?.error?.status === 401 && !authRefreshed) {
+        authRefreshed = true;
+        const { data: refreshData } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
+        if (refreshData?.session) {
+          result = await executeAction();
+        }
       }
 
       if (result?.error) {
@@ -240,13 +261,35 @@ export const db = {
       return await supabase.auth.signInWithPassword({ email, password });
     },
     signOut: async () => {
+      const pendingQueue = getLocal(SYNC_QUEUE_KEY, []);
+      if (pendingQueue.length > 0 && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        const proceed = window.confirm('Hai modifiche offline non sincronizzate. Uscire comunque e perdere le modifiche in sospeso?');
+        if (!proceed) {
+          return { error: null, cancelled: true };
+        }
+      }
       if (!isConfigured) {
-        localStorage.setItem('flussio_logged_in', 'false');
+        clearFlussioStorage();
         notifyLocalAuth('SIGNED_OUT', null);
         return { error: null };
       }
+      clearFlussioStorage();
       // Supabase signOut clears the token from sessionStorage automatically
       return await supabase.auth.signOut();
+    },
+    resetPasswordForEmail: async (email) => {
+      if (!isConfigured) {
+        return { data: null, error: new Error('Recupero password non disponibile in modalità locale.') };
+      }
+      return await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin
+      });
+    },
+    updatePassword: async (newPassword) => {
+      if (!isConfigured) {
+        return { data: null, error: new Error('Aggiornamento password non disponibile in modalità locale.') };
+      }
+      return await supabase.auth.updateUser({ password: newPassword });
     },
     onAuthStateChange: (callback) => {
       // Local mode (no Supabase configured): use localStorage + in-tab listener
@@ -378,7 +421,7 @@ export const db = {
       if (!isConfigured || !isOnline()) {
         const localList = getLocal(cacheKey, []);
         const newItem = {
-          id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+          id: generateUUID(),
           user_id: userId,
           name,
           day: parsedDay,
@@ -443,6 +486,44 @@ export const db = {
       }
       return { data, error };
     },
+    update: async (userId, id, { name, month, amount }) => {
+      const cacheKey = `flussio_annual_${userId}`;
+      const parsedMonth = parseInt(month, 10);
+      const parsedAmount = parseFloat(amount);
+
+      if (!isConfigured || !isOnline()) {
+        const localList = getLocal(cacheKey, []);
+        const existing = localList.find(item => item.id === id) || {};
+        const updatedItem = {
+          ...existing,
+          id,
+          user_id: userId,
+          name,
+          month: parsedMonth,
+          amount: parsedAmount
+        };
+        const newList = localList.map(item => item.id === id ? updatedItem : item);
+        newList.sort((a, b) => a.month - b.month);
+        setLocal(cacheKey, newList);
+        enqueueSync('update_annual', updatedItem);
+        return { data: updatedItem, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('annual_commitments')
+        .update({ name, month: parsedMonth, amount: parsedAmount })
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+      if (!error && data) {
+        const localList = getLocal(cacheKey, []);
+        const freshList = localList.map(item => item.id === id ? data : item);
+        freshList.sort((a, b) => a.month - b.month);
+        setLocal(cacheKey, freshList);
+      }
+      return { data, error };
+    },
     delete: async (userId, id) => {
       const cacheKey = `flussio_monthly_${userId}`;
 
@@ -478,7 +559,7 @@ export const db = {
     insertBulk: async (userId, items) => {
       const cacheKey = `flussio_monthly_${userId}`;
       const formattedItems = items.map(item => ({
-        id: item.id || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
+        id: item.id || generateUUID(),
         user_id: userId,
         name: item.name,
         day: parseInt(item.day, 10),
@@ -528,7 +609,7 @@ export const db = {
       if (!isConfigured || !isOnline()) {
         const localList = getLocal(cacheKey, []);
         const newItem = {
-          id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+          id: generateUUID(),
           user_id: userId,
           name,
           month: parsedMonth,
@@ -552,6 +633,44 @@ export const db = {
         localList.push(data);
         localList.sort((a, b) => a.month - b.month);
         setLocal(cacheKey, localList);
+      }
+      return { data, error };
+    },
+    update: async (userId, id, { name, month, amount }) => {
+      const cacheKey = `flussio_annual_${userId}`;
+      const parsedMonth = parseInt(month, 10);
+      const parsedAmount = parseFloat(amount);
+
+      if (!isConfigured || !isOnline()) {
+        const localList = getLocal(cacheKey, []);
+        const existing = localList.find(item => item.id === id) || {};
+        const updatedItem = {
+          ...existing,
+          id,
+          user_id: userId,
+          name,
+          month: parsedMonth,
+          amount: parsedAmount
+        };
+        const newList = localList.map(item => item.id === id ? updatedItem : item);
+        newList.sort((a, b) => a.month - b.month);
+        setLocal(cacheKey, newList);
+        enqueueSync('update_annual', updatedItem);
+        return { data: updatedItem, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('annual_commitments')
+        .update({ name, month: parsedMonth, amount: parsedAmount })
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+      if (!error && data) {
+        const localList = getLocal(cacheKey, []);
+        const freshList = localList.map(item => item.id === id ? data : item);
+        freshList.sort((a, b) => a.month - b.month);
+        setLocal(cacheKey, freshList);
       }
       return { data, error };
     },
@@ -594,7 +713,7 @@ export const db = {
     insertBulk: async (userId, items) => {
       const cacheKey = `flussio_annual_${userId}`;
       const formattedItems = items.map(item => ({
-        id: item.id || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
+        id: item.id || generateUUID(),
         user_id: userId,
         name: item.name,
         month: parseInt(item.month, 10),
@@ -653,7 +772,7 @@ export const db = {
           return { data: existing, error: null };
         }
         const newItem = {
-          id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+          id: generateUUID(),
           user_id: userId,
           annual_commitment_id: annualCommitmentId,
           year: parsedYear,
@@ -737,7 +856,7 @@ export const db = {
       if (!isConfigured || !isOnline()) {
         const localList = getLocal(cacheKey, []);
         const newItem = {
-          id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+          id: generateUUID(),
           user_id: userId,
           name,
           amount: parsedAmount,
@@ -797,6 +916,44 @@ export const db = {
       }
       return { data, error };
     },
+    update: async (userId, id, { name, month, amount }) => {
+      const cacheKey = `flussio_annual_${userId}`;
+      const parsedMonth = parseInt(month, 10);
+      const parsedAmount = parseFloat(amount);
+
+      if (!isConfigured || !isOnline()) {
+        const localList = getLocal(cacheKey, []);
+        const existing = localList.find(item => item.id === id) || {};
+        const updatedItem = {
+          ...existing,
+          id,
+          user_id: userId,
+          name,
+          month: parsedMonth,
+          amount: parsedAmount
+        };
+        const newList = localList.map(item => item.id === id ? updatedItem : item);
+        newList.sort((a, b) => a.month - b.month);
+        setLocal(cacheKey, newList);
+        enqueueSync('update_annual', updatedItem);
+        return { data: updatedItem, error: null };
+      }
+
+      const { data, error } = await supabase
+        .from('annual_commitments')
+        .update({ name, month: parsedMonth, amount: parsedAmount })
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+      if (!error && data) {
+        const localList = getLocal(cacheKey, []);
+        const freshList = localList.map(item => item.id === id ? data : item);
+        freshList.sort((a, b) => a.month - b.month);
+        setLocal(cacheKey, freshList);
+      }
+      return { data, error };
+    },
     delete: async (userId, id) => {
       const cacheKey = `flussio_planned_${userId}`;
 
@@ -842,7 +999,7 @@ export const db = {
     insertBulk: async (userId, items) => {
       const cacheKey = `flussio_planned_${userId}`;
       const formattedItems = items.map(item => ({
-        id: item.id || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
+        id: item.id || generateUUID(),
         user_id: userId,
         name: item.name,
         amount: parseFloat(item.amount),

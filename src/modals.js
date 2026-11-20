@@ -106,16 +106,32 @@ function bindModalSubmit(formId, handler) {
   });
 }
 
-// Modal: Update Residuo (Current balance)
+// Modal: Update Residuo (Current balance) with Imposta / + Aggiungi / - Sottrai + Stipendio shortcut
 export function showEditResiduoModal(onSuccess) {
+  const currentBalance = Number(store.state.profile.current_balance || 0);
+  const salaryAmount = Number(store.state.profile.salary_amount || 0);
+  const toCents = (n) => Math.round(n * 100);
+  let mode = 'set'; // set | add | subtract
+
   const formHTML = `
     <form id="edit-residuo-form">
+      <div class="balance-mode-tabs" role="group" aria-label="Modalità modifica saldo">
+        <button type="button" class="balance-mode-btn active" data-mode="set">Imposta</button>
+        <button type="button" class="balance-mode-btn" data-mode="add">+ Aggiungi</button>
+        <button type="button" class="balance-mode-btn" data-mode="subtract">- Sottrai</button>
+      </div>
+      ${salaryAmount > 0 ? `
+        <button type="button" id="quick-add-salary-btn" class="btn-quick-salary">
+          + Stipendio (${salaryAmount.toFixed(2).replace('.', ',')} €)
+        </button>
+      ` : ''}
       <div class="form-group">
-        <label class="form-label" for="residuo-val">Nuovo Residuo Conto (€)</label>
+        <label class="form-label" id="residuo-val-label" for="residuo-val">Nuovo Saldo Conto (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="text" inputmode="decimal" id="residuo-val" value="${escapeHtml(store.state.profile.current_balance)}" required autofocus />
+          <input class="input-field" type="text" inputmode="decimal" id="residuo-val" value="${escapeHtml(currentBalance)}" required autofocus />
         </div>
+        <div id="residuo-preview" class="balance-preview" style="display:none;"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Annulla</button>
@@ -124,17 +140,68 @@ export function showEditResiduoModal(onSuccess) {
     </form>
   `;
 
-  renderModalHTML('Aggiorna Residuo', formHTML);
+  renderModalHTML('Aggiorna Saldo', formHTML);
   document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
 
+  const inputEl = document.getElementById('residuo-val');
+  const labelEl = document.getElementById('residuo-val-label');
+  const previewEl = document.getElementById('residuo-preview');
+
+  const updatePreview = () => {
+    const val = parseAmount(inputEl.value);
+    if (mode === 'set' || val === null) {
+      previewEl.style.display = 'none';
+      return;
+    }
+    const baseCents = toCents(currentBalance);
+    const deltaCents = toCents(val);
+    const next = (mode === 'add' ? baseCents + deltaCents : baseCents - deltaCents) / 100;
+    previewEl.textContent = `Saldo risultante: ${next.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}`;
+    previewEl.style.display = 'block';
+  };
+
+  const setMode = (nextMode, prefillVal = null) => {
+    mode = nextMode;
+    document.querySelectorAll('.balance-mode-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+    });
+    if (mode === 'set') {
+      labelEl.textContent = 'Nuovo Saldo Conto (€)';
+      inputEl.value = prefillVal !== null ? prefillVal : String(currentBalance);
+    } else if (mode === 'add') {
+      labelEl.textContent = 'Importo da aggiungere (€)';
+      inputEl.value = prefillVal !== null ? prefillVal : '';
+    } else {
+      labelEl.textContent = 'Importo da sottrarre (€)';
+      inputEl.value = prefillVal !== null ? prefillVal : '';
+    }
+    updatePreview();
+  };
+
+  document.querySelectorAll('.balance-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.getAttribute('data-mode')));
+  });
+
+  document.getElementById('quick-add-salary-btn')?.addEventListener('click', () => {
+    setMode('add', String(salaryAmount));
+  });
+
+  inputEl.addEventListener('input', updatePreview);
+
   bindModalSubmit('edit-residuo-form', async () => {
-    const val = parseAmount(document.getElementById('residuo-val').value);
-    if (val === null) {
+    const val = parseAmount(inputEl.value);
+    if (val === null || (mode !== 'set' && val < 0)) {
       showModalError('Inserisci un importo numerico valido (es. 1250,50).');
       return;
     }
 
-    const res = await store.updateProfile({ current_balance: val });
+    const baseCents = toCents(currentBalance);
+    const deltaCents = toCents(val);
+    const targetBalance = mode === 'set'
+      ? val
+      : (mode === 'add' ? baseCents + deltaCents : baseCents - deltaCents) / 100;
+
+    const res = await store.updateProfile({ current_balance: targetBalance });
     if (!res.error) {
       closeModal();
       if (onSuccess) onSuccess();
@@ -305,57 +372,57 @@ export function showAddMonthlyModal(onSuccess) {
   });
 }
 
-// Modal: Add Annual Commitment
-export function showAddAnnualModal(onSuccess) {
+// Shared Modal: Add or Edit Annual Commitment
+function showAnnualModal({ item = null, onSuccess }) {
+  const isEdit = item !== null;
+  const months = [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+  ];
+  const selectedMonth = isEdit ? item.month : (new Date().getMonth() + 1);
+  const monthOptions = months.map((label, idx) => {
+    const m = idx + 1;
+    return `<option value="${m}" ${m === selectedMonth ? 'selected' : ''}>${label}</option>`;
+  }).join('');
+
   const formHTML = `
-    <form id="add-annual-form">
+    <form id="annual-commitment-form">
       <div class="form-group">
         <label class="form-label" for="annual-name">Nome Spesa Annuale</label>
         <div class="input-container">
           ${icons.fileText('input-icon')}
-          <input class="input-field" type="text" id="annual-name" required placeholder="Bollo Auto" maxlength="20" autofocus />
+          <input class="input-field" type="text" id="annual-name" required placeholder="Bollo Auto" maxlength="20" value="${isEdit ? escapeHtml(item.name) : ''}" autofocus />
         </div>
       </div>
-      
+
       <div class="form-group">
         <label class="form-label" for="annual-month">Mese di pagamento</label>
         <div class="input-container">
           ${icons.calendar('input-icon')}
           <select class="input-field input-select-month" id="annual-month" required>
-            <option value="1">Gennaio</option>
-            <option value="2">Febbraio</option>
-            <option value="3">Marzo</option>
-            <option value="4">Aprile</option>
-            <option value="5">Maggio</option>
-            <option value="6">Giugno</option>
-            <option value="7">Luglio</option>
-            <option value="8">Agosto</option>
-            <option value="9">Settembre</option>
-            <option value="10">Ottobre</option>
-            <option value="11">Novembre</option>
-            <option value="12">Dicembre</option>
+            ${monthOptions}
           </select>
         </div>
       </div>
-      
+
       <div class="form-group">
         <label class="form-label" for="annual-amount">Importo (€)</label>
         <div class="input-container">
           ${icons.euro('input-icon')}
-          <input class="input-field" type="text" inputmode="decimal" id="annual-amount" required placeholder="200.00" />
+          <input class="input-field" type="text" inputmode="decimal" id="annual-amount" required placeholder="200.00" value="${isEdit ? escapeHtml(item.amount) : ''}" />
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Annulla</button>
-        <button type="submit" class="btn btn-primary">Aggiungi</button>
+        <button type="submit" class="btn btn-primary">${isEdit ? 'Salva' : 'Aggiungi'}</button>
       </div>
     </form>
   `;
 
-  renderModalHTML('Aggiungi Spesa Annuale', formHTML);
+  renderModalHTML(isEdit ? 'Modifica Spesa Annuale' : 'Aggiungi Spesa Annuale', formHTML);
   document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
 
-  bindModalSubmit('add-annual-form', async () => {
+  bindModalSubmit('annual-commitment-form', async () => {
     const name = document.getElementById('annual-name').value.trim();
     const month = parseInt(document.getElementById('annual-month').value, 10);
     const amount = parseAmount(document.getElementById('annual-amount').value);
@@ -373,12 +440,24 @@ export function showAddAnnualModal(onSuccess) {
       return;
     }
 
-    const res = await store.insertAnnual({ name, month, amount });
+    const res = isEdit
+      ? await store.updateAnnual(item.id, { name, month, amount })
+      : await store.insertAnnual({ name, month, amount });
     if (!res.error) {
       closeModal();
       if (onSuccess) onSuccess();
     }
   });
+}
+
+// Modal: Add Annual Commitment
+export function showAddAnnualModal(onSuccess) {
+  showAnnualModal({ item: null, onSuccess });
+}
+
+// Modal: Edit Annual Commitment
+export function showEditAnnualModal(item, onSuccess) {
+  showAnnualModal({ item, onSuccess });
 }
 
 // Modal: Edit Monthly Commitment

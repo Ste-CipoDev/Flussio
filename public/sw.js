@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flussio-cache-v3'; // Bumped cache version
+const CACHE_NAME = 'flussio-cache-v4'; // Bumped cache version
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -8,14 +8,20 @@ const ASSETS_TO_CACHE = [
   './icon-512.png'
 ];
 
-// Install Event: pre-cache critical assets
+// Install Event: pre-cache critical assets (wait for explicit SKIP_WAITING message before activating)
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
+});
+
+// Activate new SW only when user confirms update prompt
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate Event: clean up old caches
@@ -36,7 +42,7 @@ self.addEventListener('activate', (event) => {
 // Fetch Event: Mixed Caching Strategy
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  
+
   // Skip caching for non-http(s), Supabase, HIBP API, non-GET requests, or auth routes
   if (
     event.request.method !== 'GET' ||
@@ -78,10 +84,9 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         if (isHashedAsset) {
-          // Serve immediately and do not check network
           return cachedResponse;
         }
-        
+
         // Serve immediately, but update in background
         fetch(event.request)
           .then((networkResponse) => {
@@ -92,25 +97,27 @@ self.addEventListener('fetch', (event) => {
             }
           })
           .catch(() => {});
-          
+
         return cachedResponse;
       }
 
       // Fetch from network and cache dynamically
-      return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200) {
+      return fetch(event.request)
+        .then((networkResponse) => {
+          if (!networkResponse || networkResponse.status !== 200) {
+            return networkResponse;
+          }
+
+          if (networkResponse.type === 'basic' || networkResponse.type === 'cors') {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+
           return networkResponse;
-        }
-
-        if (networkResponse.type === 'basic' || networkResponse.type === 'cors') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-
-        return networkResponse;
-      });
+        })
+        .catch(() => Response.error());
     })
   );
 });

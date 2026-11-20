@@ -129,3 +129,48 @@ export function parseAmount(raw) {
   if (!Number.isFinite(num)) return null;
   return Math.round(num * 100) / 100;
 }
+
+// Generate a valid UUID v4 even in older environments without crypto.randomUUID
+export function generateUUID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0'));
+    return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Non-blocking toast notifications
+export function showToast(message, type = 'info') {
+  if (typeof document === 'undefined') return;
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    container.setAttribute('aria-live', 'polite');
+    container.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add('visible'));
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 250);
+  }, 3600);
+}

@@ -1,11 +1,13 @@
 import { db } from './db.js';
-import { isExpenseRemaining, parseAmount } from './utils.js';
+import { isExpenseRemaining, parseAmount, showToast } from './utils.js';
 
 function resolveInitialChartTab() {
   const saved = localStorage.getItem('flussio_chart_type');
   if (saved === 'planned' || saved === 'donut') return 'planned';
   return 'fixed';
 }
+
+const now = new Date();
 
 // State management
 export const state = {
@@ -15,6 +17,8 @@ export const state = {
   annualCommitments: [],
   annualStatus: [],
   plannedExpenses: [],
+  selectedMonth: now.getMonth() + 1,
+  selectedYear: now.getFullYear(),
   activeView: 'dashboard', // dashboard, monthly, annual, settings
   isLoading: true,
   isAuthMode: 'login', // login, register
@@ -22,11 +26,14 @@ export const state = {
 };
 
 export function resetState() {
+  const today = new Date();
   state.profile = { salary_day: 27, salary_amount: 0, current_balance: 0 };
   state.monthlyCommitments = [];
   state.annualCommitments = [];
   state.annualStatus = [];
   state.plannedExpenses = [];
+  state.selectedMonth = today.getMonth() + 1;
+  state.selectedYear = today.getFullYear();
   state.activeView = 'dashboard';
   state.isLoading = false;
 }
@@ -40,7 +47,7 @@ export function setChartType(type) {
 export function checkError(result, actionName) {
   if (result && result.error) {
     console.error(`Error during ${actionName}:`, result.error);
-    alert(`Errore (${actionName}): ${result.error.message || JSON.stringify(result.error)}`);
+    showToast(`Errore (${actionName}): ${result.error.message || JSON.stringify(result.error)}`, 'error');
     return false;
   }
   return true;
@@ -103,17 +110,17 @@ export async function fetchAllData() {
   
   try {
     const userId = state.user.id;
-    const today = new Date();
-    const currentMonth = today.getMonth() + 1; // 1-12
-    const currentYear = today.getFullYear();
-    
+    const targetMonth = state.selectedMonth;
+    const targetYear = state.selectedYear;
+    const currentYear = new Date().getFullYear();
+
     // Fetch all resources in parallel
     const [profile, monthlyRes, annualRes, annualStatusRes, plannedRes] = await Promise.all([
       db.profile.get(userId),
       db.monthly.list(userId),
       db.annual.list(userId),
       db.annualStatus.list(userId, currentYear),
-      db.planned.list(userId, currentMonth, currentYear)
+      db.planned.list(userId, targetMonth, targetYear)
     ]);
     
     state.profile = profile || { salary_day: 27, salary_amount: 0, current_balance: 0 };
@@ -176,12 +183,65 @@ export async function updateMonthly(id, { name, day, amount }) {
   return res;
 }
 
+export async function selectMonth(month, year) {
+  state.selectedMonth = month;
+  state.selectedYear = year;
+  if (!state.user) return;
+  const res = await db.planned.list(state.user.id, month, year);
+  if (checkError(res, "caricamento spese del mese")) {
+    state.plannedExpenses = res.data || [];
+  }
+}
+
+export async function copyPlannedFromPreviousMonth() {
+  if (!state.user) return { error: new Error("Utente non loggato") };
+  let prevMonth = state.selectedMonth - 1;
+  let prevYear = state.selectedYear;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  const prevRes = await db.planned.list(state.user.id, prevMonth, prevYear);
+  if (!checkError(prevRes, "lettura spese mese precedente")) return prevRes;
+
+  const prevList = prevRes.data || [];
+  if (prevList.length === 0) {
+    showToast("Nessuna spesa variabile trovata nel mese precedente.", "info");
+    return { data: [], error: null };
+  }
+
+  const toInsert = prevList.map(item => ({
+    name: item.name,
+    amount: item.amount,
+    month: state.selectedMonth,
+    year: state.selectedYear
+  }));
+  const insRes = await db.planned.insertBulk(state.user.id, toInsert);
+  if (checkError(insRes, "copia spese dal mese precedente")) {
+    state.plannedExpenses = [...state.plannedExpenses, ...(insRes.data || [])];
+    showToast(`Copiate ${toInsert.length} spese dal mese precedente.`, "success");
+  }
+  return insRes;
+}
+
 export async function insertAnnual({ name, month, amount }) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const sanitizedName = sanitizeText(name);
   const res = await db.annual.insert(state.user.id, { name: sanitizedName, month, amount });
   if (checkError(res, "inserimento spesa annuale")) {
     state.annualCommitments.push(res.data);
+    state.annualCommitments.sort((a, b) => a.month - b.month);
+    return res;
+  }
+  return res;
+}
+
+export async function updateAnnual(id, { name, month, amount }) {
+  if (!state.user) return { error: new Error("Utente non loggato") };
+  const sanitizedName = sanitizeText(name);
+  const res = await db.annual.update(state.user.id, id, { name: sanitizedName, month, amount });
+  if (checkError(res, "aggiornamento spesa annuale")) {
+    state.annualCommitments = state.annualCommitments.map(item => item.id === id ? res.data : item);
     state.annualCommitments.sort((a, b) => a.month - b.month);
     return res;
   }
@@ -224,18 +284,29 @@ export async function unconfirmAnnual(annualCommitmentId, year) {
 export async function insertPlanned({ name, amount }) {
   if (!state.user) return { error: new Error("Utente non loggato") };
   const sanitizedName = sanitizeText(name);
-  const today = new Date();
   const res = await db.planned.insert(state.user.id, {
     name: sanitizedName,
     amount,
-    month: today.getMonth() + 1,
-    year: today.getFullYear()
+    month: state.selectedMonth,
+    year: state.selectedYear
   });
   if (checkError(res, "inserimento spesa variabile")) {
     state.plannedExpenses.push(res.data);
     return res;
   }
   return res;
+}
+
+export async function markPlannedPaid(item) {
+  if (!state.user || !item?.id) return { error: new Error("Voce non valida") };
+  const delRes = await deletePlanned(item.id);
+  if (delRes.error) return delRes;
+  const newBalance = (toCents(state.profile.current_balance || 0) - toCents(item.amount)) / 100;
+  const profRes = await updateProfile({ current_balance: newBalance });
+  if (!profRes.error) {
+    showToast(`"${item.name}" segnata pagata e scalata dal saldo.`, "success");
+  }
+  return profRes;
 }
 
 export async function updatePlanned(id, { name, amount }) {
@@ -410,13 +481,13 @@ async function rollbackImport(userId, snapshot, currentMonth, currentYear) {
 
 export async function executeImport(data) {
   if (!state.user) {
-    alert('Utente non autenticato.');
+    showToast('Utente non autenticato.', 'error');
     return false;
   }
 
   const validation = validateImportData(data);
   if (!validation.valid) {
-    alert(`Backup non valido: ${validation.error}`);
+    showToast(`Backup non valido: ${validation.error}`, 'error');
     return false;
   }
 
@@ -502,11 +573,13 @@ export async function executeImport(data) {
     }
 
     // Refresh memory cache in a single run
+    state.selectedMonth = currentMonth;
+    state.selectedYear = currentYear;
     await fetchAllData();
     return true;
   } catch (err) {
     await rollbackImport(userId, snapshot, currentMonth, currentYear);
-    alert('Errore imprevisto durante l\'importazione: ' + err.message);
+    showToast('Errore imprevisto durante l\'importazione: ' + err.message, 'error');
     return false;
   }
 }

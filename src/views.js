@@ -8,7 +8,8 @@ import {
   getNextSalaryDate, 
   isExpenseRemaining,
   escapeHtml,
-  parseAmount
+  parseAmount,
+  showToast
 } from './utils.js';
 import { db, isConfigured } from './db.js';
 
@@ -73,7 +74,7 @@ function renderChartVisualization(metrics, onRefreshDashboard) {
       <div class="bar-chart-wrapper">
         <div class="salary-summary-row">
           <span class="salary-summary-label">Stipendio: <strong>${formatCurrency(S)}</strong></span>
-          <button id="quick-edit-salary-btn" class="action-icon" title="Modifica stipendio mensile">
+          <button id="quick-edit-salary-btn" class="action-icon" title="Modifica stipendio mensile" aria-label="Modifica stipendio mensile">
             ${icons.edit('w-4 h-4')}
           </button>
         </div>
@@ -167,8 +168,27 @@ export function renderDashboard() {
   const nextSalaryDate = getNextSalaryDate(store.state.profile.salary_day);
   const container = document.getElementById('view-dashboard');
   if (!container) return;
-  
+
+  const today = new Date();
+  const currentMonth = today.getMonth() + 1;
+  const currentYear = today.getFullYear();
+  const dueUnpaidAnnuals = store.state.annualCommitments.filter(item =>
+    item.month === currentMonth &&
+    !store.state.annualStatus.some(s => s.annual_commitment_id === item.id && s.year === currentYear)
+  );
+  const dueUnpaidTotal = dueUnpaidAnnuals.reduce((sum, item) => sum + Math.round(Number(item.amount || 0) * 100), 0) / 100;
+
   container.innerHTML = `
+    ${dueUnpaidAnnuals.length > 0 ? `
+      <button type="button" id="dashboard-annual-alert" class="annual-due-banner">
+        <span class="annual-due-icon">${icons.info('w-5 h-5')}</span>
+        <span class="annual-due-text">
+          <strong>${dueUnpaidAnnuals.length === 1 ? '1 spesa annuale in scadenza questo mese' : `${dueUnpaidAnnuals.length} spese annuali in scadenza questo mese`}</strong>
+          <small>Totale da confermare: ${formatCurrency(dueUnpaidTotal)} · Tocca per aprire Annuali</small>
+        </span>
+      </button>
+    ` : ''}
+
     <!-- Metrics Cards Grid -->
     <div class="summary-grid">
       <!-- Residuo Attuale -->
@@ -179,7 +199,7 @@ export function renderDashboard() {
         </div>
         <div class="metric-value-col">
           <span class="metric-value">${formatCurrency(metrics.residuo)}</span>
-          <button id="edit-residuo-btn" class="metric-action-btn" title="Modifica saldo attuale">
+          <button id="edit-residuo-btn" class="metric-action-btn" title="Modifica saldo attuale" aria-label="Modifica saldo attuale">
             ${icons.edit('w-5 h-5')}
           </button>
         </div>
@@ -256,10 +276,40 @@ export function renderDashboard() {
       </button>
     </div>
 
+    <div class="month-nav">
+      <button type="button" id="planned-prev-month" class="action-icon" aria-label="Mese precedente">
+        ${icons.chevronLeft('w-5 h-5')}
+      </button>
+      <span class="month-nav-label">${escapeHtml(getMonthName(store.state.selectedMonth))} ${escapeHtml(store.state.selectedYear)}</span>
+      <button type="button" id="planned-next-month" class="action-icon" aria-label="Mese successivo">
+        ${icons.chevronRight('w-5 h-5')}
+      </button>
+    </div>
+
     <div class="card-list" id="planned-expenses-list">
       <!-- Will be rendered dynamically -->
     </div>
   `;
+
+  document.getElementById('dashboard-annual-alert')?.addEventListener('click', () => {
+    switchView('annual');
+  });
+
+  document.getElementById('planned-prev-month')?.addEventListener('click', async () => {
+    let m = store.state.selectedMonth - 1;
+    let y = store.state.selectedYear;
+    if (m < 1) { m = 12; y -= 1; }
+    await store.selectMonth(m, y);
+    renderDashboard();
+  });
+
+  document.getElementById('planned-next-month')?.addEventListener('click', async () => {
+    let m = store.state.selectedMonth + 1;
+    let y = store.state.selectedYear;
+    if (m > 12) { m = 1; y += 1; }
+    await store.selectMonth(m, y);
+    renderDashboard();
+  });
 
   // Draw chart visualizer
   renderChartVisualization(metrics, renderDashboard);
@@ -267,7 +317,7 @@ export function renderDashboard() {
   // Attach toggle listeners
   const fixedToggle = document.getElementById('toggle-chart-fixed');
   const plannedToggle = document.getElementById('toggle-chart-planned');
-  
+
   if (fixedToggle && plannedToggle) {
     fixedToggle.addEventListener('click', () => {
       if (store.state.chartType !== 'fixed') {
@@ -277,7 +327,7 @@ export function renderDashboard() {
         renderChartVisualization(metrics, renderDashboard);
       }
     });
-    
+
     plannedToggle.addEventListener('click', () => {
       if (store.state.chartType !== 'planned') {
         store.setChartType('planned');
@@ -294,9 +344,16 @@ export function renderDashboard() {
     listContainer.innerHTML = `
       <div class="empty-state">
         ${icons.info('w-8 h-8 mx-auto')}
-        <p>Nessuna spesa variabile programmata per questo mese.</p>
+        <p>Nessuna spesa variabile programmata per ${escapeHtml(getMonthName(store.state.selectedMonth))}.</p>
+        <button type="button" id="copy-prev-month-btn" class="add-btn" style="margin: 0.9rem auto 0;">
+          ${icons.copy('w-4 h-4')} Copia dal mese scorso
+        </button>
       </div>
     `;
+    document.getElementById('copy-prev-month-btn')?.addEventListener('click', async () => {
+      await store.copyPlannedFromPreviousMonth();
+      renderDashboard();
+    });
   } else {
     listContainer.innerHTML = store.state.plannedExpenses.map(item => `
       <div class="item-card">
@@ -306,16 +363,31 @@ export function renderDashboard() {
         </div>
         <div class="item-right">
           <span class="item-amount">${formatCurrency(item.amount)}</span>
-          <button class="action-icon edit-btn" data-id="${escapeHtml(item.id)}" title="Modifica">
+          <button class="action-icon pay-deduct-btn" data-id="${escapeHtml(item.id)}" title="Segna pagata e scala dal saldo" aria-label="Segna ${escapeHtml(item.name)} come pagata e scala dal saldo">
+            ${icons.checkCircle('w-4 h-4')}
+          </button>
+          <button class="action-icon edit-btn" data-id="${escapeHtml(item.id)}" title="Modifica" aria-label="Modifica ${escapeHtml(item.name)}">
             ${icons.edit('w-4 h-4')}
           </button>
-          <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina">
+          <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina" aria-label="Elimina ${escapeHtml(item.name)}">
             ${icons.trash('w-4 h-4')}
           </button>
         </div>
       </div>
     `).join('');
-    
+
+    // Attach mark paid & deduct listeners
+    listContainer.querySelectorAll('.pay-deduct-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const item = store.state.plannedExpenses.find(i => i.id === id);
+        if (item && confirm(`Segnare "${item.name}" come pagata e scalare ${formatCurrency(item.amount)} dal saldo?`)) {
+          await store.markPlannedPaid(item);
+          renderDashboard();
+        }
+      });
+    });
+
     // Attach edit listeners
     listContainer.querySelectorAll('.edit-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -356,8 +428,8 @@ export function renderDashboard() {
 export function renderMonthly() {
   const container = document.getElementById('view-monthly');
   if (!container) return;
-  
-  const totalMonthly = store.state.monthlyCommitments.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+
+  const totalMonthly = store.calculateMetrics().totaleSpeseFisse;
   
   container.innerHTML = `
     <div class="section-header">
@@ -405,10 +477,10 @@ export function renderMonthly() {
           </div>
           <div class="item-right">
             <span class="item-amount">${formatCurrency(item.amount)}</span>
-            <button class="action-icon edit-btn" data-id="${escapeHtml(item.id)}" title="Modifica">
+            <button class="action-icon edit-btn" data-id="${escapeHtml(item.id)}" title="Modifica" aria-label="Modifica ${escapeHtml(item.name)}">
               ${icons.edit('w-4 h-4')}
             </button>
-            <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina">
+            <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina" aria-label="Elimina ${escapeHtml(item.name)}">
               ${icons.trash('w-4 h-4')}
             </button>
           </div>
@@ -451,11 +523,18 @@ export function renderMonthly() {
 export function renderAnnual() {
   const container = document.getElementById('view-annual');
   if (!container) return;
-  
+
   const today = new Date();
   const currentMonth = today.getMonth() + 1; // 1-12
   const currentYear = today.getFullYear();
-  
+
+  const totalAnnualCents = store.state.annualCommitments.reduce(
+    (sum, item) => sum + Math.round(Number(item.amount || 0) * 100),
+    0
+  );
+  const totalAnnual = totalAnnualCents / 100;
+  const monthlyReserve = Math.round(totalAnnualCents / 12) / 100;
+
   container.innerHTML = `
     <div class="section-header">
       <h3>Spese Annuali</h3>
@@ -464,11 +543,21 @@ export function renderAnnual() {
       </button>
     </div>
 
+    <div class="metric-card horizontal mb-4" style="margin-bottom: 1rem;">
+      <div class="metric-info-col">
+        <span class="metric-label">Totale Annuale</span>
+        <span class="metric-details">Accantonamento mensile consigliato: <strong>${formatCurrency(monthlyReserve)}</strong></span>
+      </div>
+      <div class="metric-value-col">
+        <span class="metric-value" style="font-size: 1.5rem; color: var(--accent-gold);">${formatCurrency(totalAnnual)}</span>
+      </div>
+    </div>
+
     <div class="info-banner">
       ${icons.info('w-5 h-5')}
       <div class="info-banner-content">
         <span class="info-banner-title">Come funzionano?</span>
-        <span>Le spese annuali compaiono in rosso durante il mese di scadenza per avvisarti. Clicca sul cerchio per confermare il pagamento. Non influiscono sui calcoli mensili.</span>
+        <span>Le spese in scadenza questo mese compaiono in rosso. Tocca la spunta per confermare qualsiasi pagamento dell'anno corrente. Non influiscono sui calcoli mensili.</span>
       </div>
     </div>
 
@@ -491,20 +580,18 @@ export function renderAnnual() {
       const isConfirmed = store.state.annualStatus.some(
         s => s.annual_commitment_id === item.id && s.year === currentYear
       );
-      
+
       let cardStatusClass = '';
       let badgeHtml = '';
       let checkActionClass = '';
-      
-      if (isDueThisMonth) {
-        if (isConfirmed) {
-          cardStatusClass = 'status-confirmed';
-          badgeHtml = '<span class="item-badge paid">Pagato</span>';
-          checkActionClass = 'confirmed';
-        } else {
-          cardStatusClass = 'status-due';
-          badgeHtml = '<span class="item-badge unpaid">Scadenza Questo Mese!</span>';
-        }
+
+      if (isConfirmed) {
+        cardStatusClass = 'status-confirmed';
+        badgeHtml = '<span class="item-badge paid">Pagato</span>';
+        checkActionClass = 'confirmed';
+      } else if (isDueThisMonth) {
+        cardStatusClass = 'status-due';
+        badgeHtml = '<span class="item-badge unpaid">Scadenza Questo Mese!</span>';
       }
 
       return `
@@ -515,14 +602,16 @@ export function renderAnnual() {
           </div>
           <div class="item-right">
             <span class="item-amount">${formatCurrency(item.amount)}</span>
-            
-            ${isDueThisMonth ? `
-              <button class="action-icon confirm-btn ${checkActionClass}" data-id="${escapeHtml(item.id)}" data-confirmed="${isConfirmed}" title="${isConfirmed ? 'Annulla Pagamento' : 'Conferma Pagamento'}">
-                ${icons.checkCircle('w-5 h-5')}
-              </button>
-            ` : ''}
 
-            <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina">
+            <button class="action-icon confirm-btn ${checkActionClass}" data-id="${escapeHtml(item.id)}" data-confirmed="${isConfirmed}" title="${isConfirmed ? 'Annulla Pagamento' : 'Conferma Pagamento'}" aria-label="${isConfirmed ? 'Annulla pagamento' : 'Conferma pagamento'} ${escapeHtml(item.name)}">
+              ${icons.checkCircle('w-5 h-5')}
+            </button>
+
+            <button class="action-icon edit-btn" data-id="${escapeHtml(item.id)}" title="Modifica" aria-label="Modifica ${escapeHtml(item.name)}">
+              ${icons.edit('w-4 h-4')}
+            </button>
+
+            <button class="action-icon delete-btn" data-id="${escapeHtml(item.id)}" title="Elimina" aria-label="Elimina ${escapeHtml(item.name)}">
               ${icons.trash('w-4 h-4')}
             </button>
           </div>
@@ -539,7 +628,7 @@ export function renderAnnual() {
 
         const id = targetBtn.getAttribute('data-id');
         const isConfirmed = targetBtn.getAttribute('data-confirmed') === 'true';
-        
+
         try {
           const res = isConfirmed
             ? await store.unconfirmAnnual(id, currentYear)
@@ -551,6 +640,17 @@ export function renderAnnual() {
           if (document.body.contains(targetBtn)) {
             targetBtn.disabled = false;
           }
+        }
+      });
+    });
+
+    // Attach edit listeners
+    listContainer.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        const item = store.state.annualCommitments.find(i => i.id === id);
+        if (item) {
+          modals.showEditAnnualModal(item, renderAnnual);
         }
       });
     });
@@ -707,12 +807,13 @@ export function renderSettings() {
     salaryAmountInput.addEventListener('change', async (e) => {
       const parsed = parseAmount(e.target.value);
       if (parsed === null || parsed < 0) {
-        alert('Inserisci uno stipendio valido (>= 0, es. 1800,00).');
+        showToast('Inserisci uno stipendio valido (>= 0, es. 1800,00).', 'error');
         e.target.value = store.state.profile.salary_amount ?? 0;
         return;
       }
       const res = await store.updateProfile({ salary_amount: parsed });
       if (!res.error) {
+        showToast('Stipendio aggiornato.', 'success');
         renderSettings();
       } else {
         e.target.value = store.state.profile.salary_amount ?? 0;
@@ -743,9 +844,9 @@ export function renderSettings() {
           const res = await db.auth.deleteAccount();
           if (loader) loader.style.display = 'none';
           if (res.error) {
-            alert(`Errore durante l'eliminazione dell'account: ${res.error.message || JSON.stringify(res.error)}`);
+            showToast(`Errore durante l'eliminazione dell'account: ${res.error.message || JSON.stringify(res.error)}`, 'error');
           } else {
-            alert("Account eliminato con successo. Verrai reindirizzato alla schermata di accesso.");
+            showToast("Account eliminato con successo.", 'success');
           }
         }
       }
@@ -801,12 +902,12 @@ export function renderSettings() {
             const success = await store.executeImport(data);
             if (loader) loader.style.display = 'none';
             if (success) {
-              alert('Importazione completata con successo!');
+              showToast('Importazione completata con successo!', 'success');
               switchView('dashboard'); // Redirect to dashboard to see results!
             }
           }
         } catch (err) {
-          alert('Errore durante l\'importazione: il file JSON non è valido.');
+          showToast('Errore durante l\'importazione: il file JSON non è valido.', 'error');
           console.error(err);
         }
       };

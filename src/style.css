@@ -339,6 +339,9 @@ h1, h2, h3, h4, .font-display {
   justify-content: center;
   flex: 1;
   height: 100%;
+  background: none;
+  border: none;
+  font-family: inherit;
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.75rem;
@@ -1197,4 +1200,208 @@ h1, h2, h3, h4, .font-display {
 .w-8 { width: 2rem; }
 .h-8 { height: 2rem; }
 .mx-auto { margin-left: auto; margin-right: auto; }
+
+/* Auth inline helpers */
+.auth-inline-link {
+  background: none;
+  border: none;
+  color: var(--accent-gold);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+.auth-inline-link:hover {
+  text-decoration: underline;
+}
+
+.privacy-consent-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.privacy-consent-row input[type="checkbox"] {
+  accent-color: var(--accent-gold);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.privacy-consent-row a {
+  color: var(--accent-gold);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Dashboard annual alert banner */
+.annual-due-banner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 16px;
+  background: var(--accent-red-bg);
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition-fast);
+}
+
+.annual-due-banner:hover {
+  border-color: var(--accent-red);
+}
+
+.annual-due-icon {
+  color: var(--accent-red);
+  display: flex;
+  align-items: center;
+}
+
+.annual-due-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.annual-due-text small {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Month navigator */
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 0.35rem 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.month-nav-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Balance adjust modal tabs & shortcut */
+.balance-mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 0.85rem;
+}
+
+.balance-mode-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: 9px;
+  padding: 0.45rem 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.balance-mode-btn.active {
+  background: var(--accent-gold);
+  color: #050506;
+}
+
+.btn-quick-salary {
+  width: 100%;
+  background: var(--accent-green-bg);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: var(--accent-green);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 0.85rem;
+  transition: var(--transition-fast);
+}
+
+.btn-quick-salary:hover {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.balance-preview {
+  margin-top: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-gold);
+}
+
+.action-icon.pay-deduct-btn {
+  color: var(--accent-green);
+}
+
+.action-icon.pay-deduct-btn:hover {
+  background-color: var(--accent-green-bg);
+}
+
+/* Toast notifications */
+.toast-container {
+  position: fixed;
+  bottom: calc(92px + var(--safe-area-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(92vw, 420px);
+  pointer-events: none;
+}
+
+.toast {
+  background: #161821;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-error {
+  border-color: rgba(244, 63, 94, 0.55);
+  color: #fda4af;
+}
+
+.toast-success {
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #6ee7b7;
+}
+
 
